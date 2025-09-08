@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git-Done - Deadline-Driven Development</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>Git-Done</h1>
+                <p>Procrastination killer for developers</p>
+            </div>
+            <div class="auth-box">
+                {% if username %}
+                    <div class="user-info">
+                        <span>Welcome, <strong>{{ username }}</strong>!</span>
+                        <a href="{{ url_for('logout') }}" class="btn-secondary">Logout</a>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('github_auth') }}" class="btn-primary">
+                        Login with GitHub
+                    </a>
+                {% endif %}
+            </div>
+        </header>
+        
+        <main>
+            {% if username %}
+                <div id="dashboard">
+                    <div id="create-goal-form" class="card">
+                        <h2>Create New Goal</h2>
+                        <form id="goal-form">
+                            <input type="text" id="description" placeholder="Goal description" required>
+                            <input type="datetime-local" id="deadline" required>
+                            <input type="url" id="repo-url" placeholder="GitHub repository URL" required>
+                            <input type="text" id="completion-condition" placeholder="Completion condition (e.g., #feature-complete)" required>
+                            <button type="submit" class="btn-primary">Start Countdown</button>
+                        </form>
+                    </div>
+                    
+                    <div id="goals-container">
+                        <!-- Goals will be dynamically loaded here -->
+                    </div>
+                </div>
+            {% else %}
+                <div class="login-prompt card">
+                    <h2>Welcome to Git-Done!</h2>
+                    <p>Connect your GitHub account to create deadline-driven goals and track your progress with real-time countdowns.</p>
+                    <p>Your goals can be embedded in Notion and other platforms for public accountability.</p>
+                </div>
+            {% endif %}
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

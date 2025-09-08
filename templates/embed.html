@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ goal.description }} - Git-Done</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            background: #0d1117;
+            color: #f0f6fc;
+            padding: 1rem;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .widget {
+            background: rgba(33, 38, 45, 0.9);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .description {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: #8b949e;
+        }
+
+        .countdown {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #238636;
+            margin: 1rem 0;
+            text-shadow: 0 0 20px rgba(35, 134, 54, 0.3);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+        }
+
+        .countdown.urgent {
+            color: #da3633;
+            animation: pulse 1s infinite;
+        }
+
+        .countdown.completed {
+            color: #238636;
+        }
+
+        .status {
+            font-size: 0.8rem;
+            color: #8b949e;
+            margin-top: 1rem;
+        }
+
+        .status.completed {
+            color: #238636;
+            font-weight: 600;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        .branding {
+            font-size: 0.7rem;
+            color: #6e7681;
+            margin-top: 1rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="widget">
+        <div class="description">{{ goal.description }}</div>
+        <div class="countdown" id="countdown">--:--:--</div>
+        <div class="status" id="status">Loading...</div>
+        <div class="branding">Powered by Git-Done</div>
+    </div>
+
+    <script>
+        const token = '{{ goal.embed_token }}';
+        const countdownEl = document.getElementById('countdown');
+        const statusEl = document.getElementById('status');
+
+        function updateWidget() {
+            fetch(`/api/embed/${token}/data`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        countdownEl.textContent = '✓ DONE';
+                        countdownEl.className = 'countdown completed';
+                        statusEl.textContent = 'Commit verified. Well done.';
+                        statusEl.className = 'status completed';
+                        return;
+                    }
+
+                    const timeRemaining = data.time_remaining;
+
+                    if (timeRemaining <= 0) {
+                        countdownEl.textContent = '00:00:00';
+                        countdownEl.className = 'countdown urgent';
+                        statusEl.textContent = "Time's up! Push that commit!";
+                        statusEl.className = 'status';
+                        return;
+                    }
+
+                    const hours = Math.floor(timeRemaining / 3600);
+                    const minutes = Math.floor((timeRemaining % 3600) / 60);
+                    const seconds = timeRemaining % 60;
+
+                    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    countdownEl.textContent = timeString;
+
+                    // Add urgency styling when less than 1 hour left
+                    if (timeRemaining < 3600) {
+                        countdownEl.className = 'countdown urgent';
+                        statusEl.textContent = `${hours > 0 ? hours + 'h' : minutes + 'm'} to ${data.completion_condition}`;
+                    } else {
+                        countdownEl.className = 'countdown';
+                        statusEl.textContent = `Deadline: ${new Date(data.deadline).toLocaleString()}`;
+                    }
+                    statusEl.className = 'status';
+                })
+                .catch(error => {
+                    console.error('Error updating widget:', error);
+                    statusEl.textContent = 'Error loading data';
+                });
+        }
+
+        // Update immediately and then every second
+        updateWidget();
+        setInterval(updateWidget, 1000);
+    </script>
+</body>
+
+</html>
