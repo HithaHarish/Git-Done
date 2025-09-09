@@ -101,12 +101,9 @@ def logout():
 @application.route('/api/github-webhook', methods=['POST'])
 def github_webhook():
     """Handle and verify GitHub webhook events."""
-    # --- 1. Verify the signature for security ---
     signature_header = request.headers.get('X-Hub-Signature-256')
     if not signature_header:
         return jsonify({'error': 'Request is missing signature header'}), 403
-
-    # Compute the expected signature
     hash_object = hmac.new(
         application.config['SECRET_KEY'].encode('utf-8'),
         msg=request.data,
@@ -117,17 +114,11 @@ def github_webhook():
     if not hmac.compare_digest(expected_signature, signature_header):
         return jsonify({'error': 'Invalid signature. Request rejected.'}), 403
 
-    # --- 2. Process the event payload ---
     payload = request.get_json()
-    
-    # We only care about 'push' events
     if request.headers.get('X-GitHub-Event') == 'push':
         repo_full_name = payload.get('repository', {}).get('full_name')
         if not repo_full_name:
             return jsonify({'status': 'Payload missing repository name'}), 400
-
-        # Find the active goal for this repository.
-        # Note: This simple logic assumes one active goal per repo.
         goal = Goal.query.filter_by(
             repo_owner=repo_full_name.split('/')[0], 
             repo_name=repo_full_name.split('/')[1], 
@@ -135,21 +126,15 @@ def github_webhook():
         ).first()
 
         if not goal:
-            # No active goal for this repo, so we can ignore the push.
             return jsonify({'status': 'No active goal for this repository'}), 200
 
-        # --- 3. Check commit messages for the completion condition ---
         for commit in payload.get('commits', []):
             commit_message = commit.get('message', '')
             if goal.completion_condition in commit_message:
                 print(f"Completion condition '{goal.completion_condition}' found in commit! Goal {goal.id} completed.")
-                
                 goal.status = 'completed'
                 goal.completed_at = datetime.utcnow()
                 db.session.commit()
-                
-                # In a full app, you might send a real-time notification to the frontend here.
-                
                 break # Stop checking other commits in this push
 
     return jsonify({'status': 'received'}), 200
@@ -161,13 +146,13 @@ def github_auth():
     
     # Use BASE_URL if available, otherwise use the request host
     base_url = os.environ.get('BASE_URL')
-    print(f"DEBUG: OAuth BASE_URL: {base_url}")  # Debug print
+    #print(f"DEBUG: OAuth BASE_URL: {base_url}")
     if base_url:
         redirect_uri = f'{base_url}/auth/callback'
     else:
         redirect_uri = url_for('github_callback', _external=True)
     
-    print(f"DEBUG: OAuth redirect_uri: {redirect_uri}")  # Debug print
+   # print(f"DEBUG: OAuth redirect_uri: {redirect_uri}")
     scope = 'repo'
     return redirect(f'https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}')
 
@@ -244,8 +229,6 @@ def create_goal():
             repo_name = repo_name.replace('.git','')
     except (ValueError, IndexError):
         return jsonify({'error':'Invalid repository URL. Use format: https://github.com/owner/repo'}),400
-    
-    # Generate unique embed token
     embed_token = secrets.token_urlsafe(16)
     
     goal = Goal(
@@ -263,8 +246,8 @@ def create_goal():
     db.session.commit()
     
     # Create GitHub webhook
-    base_url = os.environ.get('BASE_URL', 'https://your-ngrok-url.ngrok.io')  # Replace with your ngrok URL
-    if not base_url or base_url == 'https://your-ngrok-url.ngrok.io':
+    base_url = os.environ.get('BASE_URL')
+    if not base_url:
         print("WARNING: BASE_URL not set. Using localhost - webhook will fail in production.")
         print("For testing, use ngrok: 'ngrok http 5000' and set BASE_URL to the ngrok URL")
         return jsonify(goal.to_dict()), 201
@@ -286,20 +269,8 @@ def embed_widget(token):
     goal = Goal.query.filter_by(embed_token=token).first()
     if not goal:
         return "Widget not found", 404
-    
     response = make_response(render_template('embed.html', goal=goal))
-
-    # --- START: Changes for Embedding in Notion ---
-    # Option 1: Allow embedding from any origin (less secure, but often works for embeds)
-    # Use with caution. For testing, this is often used.
     response.headers['X-Frame-Options'] = 'ALLOWALL'
-
-    # Option 2: More secure alternative using Content-Security-Policy with frame-ancestors
-    # This allows embedding only from your own domain and Notion's domain.
-    # This is generally preferred over X-Frame-Options: ALLOW-FROM
-    # response.headers['Content-Security-Policy'] = "frame-ancestors 'self' https://www.notion.so;"
-    # --- END: Changes for Embedding in Notion ---
-
     return response
 
 @application.route('/api/embed/<token>/data')
@@ -328,8 +299,6 @@ def embed_data(token):
         'completion_condition': goal.completion_condition,
         'completed_at': goal.completed_at.isoformat() if goal.completed_at else None
     })
-    
-    # Add CORS headers for embedding
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
