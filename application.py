@@ -15,12 +15,12 @@ load_dotenv()
 application = Flask(__name__)
 
 #GitHub OAuth configuration
-application.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID', 'your-client-id')
-application.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET', 'your-client-secret')
+application.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID')
+application.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET')
 # Database configuration
-application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gitdone.db'
+application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL','sqlite:///gitdone.db')
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
 db = SQLAlchemy(application)
 
@@ -143,8 +143,6 @@ def github_webhook():
 def github_auth():
     """Redirect to GitHub for authentication"""
     client_id = application.config['GITHUB_CLIENT_ID']
-    
-    # Use BASE_URL if available, otherwise use the request host
     base_url = os.environ.get('BASE_URL')
     #print(f"DEBUG: OAuth BASE_URL: {base_url}")
     if base_url:
