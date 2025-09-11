@@ -266,7 +266,39 @@ class GitDoneApp {
     }
 }
 
+// Theme Toggle Functionality
+class ThemeManager {
+    constructor() {
+        this.currentTheme = localStorage.getItem('theme') || 'dark';
+        this.init();
+    }
+
+    init() {
+        // Set initial theme
+        document.documentElement.setAttribute('data-theme', this.currentTheme);
+        
+        // Bind toggle button
+        const toggleButton = document.getElementById('theme-toggle');
+        if (toggleButton) {
+            toggleButton.addEventListener('click', () => this.toggleTheme());
+        }
+    }
+
+    toggleTheme() {
+        this.currentTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', this.currentTheme);
+        localStorage.setItem('theme', this.currentTheme);
+        
+        // Add a subtle animation effect
+        document.body.style.transition = 'all 0.3s ease';
+        setTimeout(() => {
+            document.body.style.transition = '';
+        }, 300);
+    }
+}
+
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new GitDoneApp();
+    new ThemeManager();
 });
