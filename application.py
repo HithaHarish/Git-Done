@@ -18,7 +18,7 @@ application = Flask(__name__)
 application.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID')
 application.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET')
 # Database configuration
-application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL','sqlite:///gitdone.db')
+application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
