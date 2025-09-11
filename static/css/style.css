@@ -247,6 +247,20 @@ header p {
     gap: 1.5rem;
 }
 
+.input-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.input-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    padding-left: 0.25rem;
+}
+
 #goal-form input {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
@@ -255,7 +269,7 @@ header p {
     color: var(--text-primary);
     font-size: 1rem;
     transition: var(--transition);
-    position: relative;
+    width: 100%;
 }
 
 #goal-form input::placeholder {
@@ -272,6 +286,45 @@ header p {
 
 #goal-form input:hover {
     border-color: var(--border-light);
+}
+
+/* Special styling for datetime-local input */
+#goal-form input[type="datetime-local"] {
+    color-scheme: dark;
+}
+
+#goal-form input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+    opacity: 0.8;
+    transition: var(--transition);
+}
+
+#goal-form input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Input focus animations */
+.input-group input:focus + .input-label,
+.input-group input:not(:placeholder-shown) + .input-label {
+    color: var(--accent);
+}
+
+/* Better placeholder styling */
+#goal-form input:focus::placeholder {
+    opacity: 0.5;
+    transform: translateX(4px);
+}
+
+/* Input validation styling */
+#goal-form input:valid {
+    border-color: var(--success);
+}
+
+#goal-form input:invalid:not(:focus):not(:placeholder-shown) {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.1);
 }
 
 .goal-widget {
@@ -545,6 +598,11 @@ header p {
     
     #goal-form input {
         padding: 0.875rem 1rem;
+        font-size: 0.95rem;
+    }
+    
+    .input-label {
+        font-size: 0.8rem;
     }
 }
 

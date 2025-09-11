@@ -42,17 +42,17 @@
                             🎯 Create New Goal
                         </h2>
                         <form id="goal-form">
-                            <div style="position: relative;">
+                            <div class="input-group">
                                 <input type="text" id="description" placeholder="What do you want to accomplish?" required>
                             </div>
-                            <div style="position: relative;">
+                            <div class="input-group">
+                                <label for="deadline" class="input-label">Deadline</label>
                                 <input type="datetime-local" id="deadline" required>
-                                <label for="deadline" style="position: absolute; top: -8px; left: 12px; background: var(--glass-bg); padding: 0 8px; font-size: 0.8rem; color: var(--text-muted);">Deadline</label>
                             </div>
-                            <div style="position: relative;">
+                            <div class="input-group">
                                 <input type="url" id="repo-url" placeholder="https://github.com/username/repository" required>
                             </div>
-                            <div style="position: relative;">
+                            <div class="input-group">
                                 <input type="text" id="completion-condition" placeholder="Completion tag (e.g., #feature-complete)" required>
                             </div>
                             <button type="submit" class="btn-primary">
