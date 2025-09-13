@@ -45,10 +45,10 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
 
 ## Tech Stack
 
-- **Backend**: Python Flask + SQLAlchemy + SQLite
+- **Backend**: Python Flask + SQLAlchemy + AWS RDS PostgreSQL
 - **Frontend**: Vanilla HTML/CSS/JavaScript
 - **Integration**: GitHub API + Webhooks
-- **Deployment**: Progressive Web App
+- **Deployment**: AWS Elastic Beanstalk + CloudFront
 
 ## Development
 
@@ -59,5 +59,6 @@ The project uses Kiro for development assistance:
 - **Steering**: Project guidelines in `.kiro/steering/`
 
 ## License
+
 
 MIT License - Build something awesome.
