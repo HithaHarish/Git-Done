@@ -248,166 +248,117 @@
     <script>
         class EmbedWidget {
             constructor() {
-                this.token = '{{ goal.embed_token }}';
-                this.countdownEl = document.getElementById('countdown');
-                this.statusEl = document.getElementById('status');
-                this.retryCount = 0;
-                this.maxRetries = 3;
-                this.updateInterval = null;
-                this.lastSuccessfulUpdate = Date.now();
-                this.connectionLost = false;
+                // Get goal data from server-side rendering - no API calls needed!
+                this.goalData = {
+                    description: '{{ goal.description }}',
+                    deadline: new Date('{{ goal.deadline.isoformat() }}'),
+                    status: '{{ goal.status }}',
+                    completionCondition: '{{ goal.completion_condition }}',
+                    completedAt: {{ 'new Date("' + goal.completed_at.isoformat() + '")' if goal.completed_at else 'null' }
+            }
+        };
 
-                this.init();
+        this.countdownEl = document.getElementById('countdown');
+        this.statusEl = document.getElementById('status');
+        this.updateInterval = null;
+
+        this.init();
             }
 
-            init() {
-                this.updateWidget();
-                this.startUpdateLoop();
+        init() {
+            // Start the countdown immediately
+            this.updateCountdown();
+            this.startCountdownLoop();
 
-                // Handle page visibility changes to optimize updates
-                document.addEventListener('visibilitychange', () => {
-                    if (document.hidden) {
-                        this.pauseUpdates();
-                    } else {
-                        this.resumeUpdates();
-                    }
-                });
-            }
-
-            async updateWidget() {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-                    const response = await fetch(`/api/embed/${this.token}/data`, {
-                        signal: controller.signal,
-                        headers: {
-                            'Cache-Control': 'no-cache',
-                            'Pragma': 'no-cache'
-                        }
-                    });
-
-                    clearTimeout(timeoutId);
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    const data = await response.json();
-                    this.handleSuccessfulUpdate(data);
-
-                } catch (error) {
-                    this.handleUpdateError(error);
-                }
-            }
-
-            handleSuccessfulUpdate(data) {
-                this.retryCount = 0;
-                this.lastSuccessfulUpdate = Date.now();
-
-                if (this.connectionLost) {
-                    this.connectionLost = false;
-                    console.log('Connection restored');
-                }
-
-                if (data.status === 'completed') {
-                    this.countdownEl.textContent = '🎉 DONE';
-                    this.countdownEl.className = 'countdown completed';
-                    this.statusEl.textContent = '✅ Commit verified. Well done!';
-                    this.statusEl.className = 'status completed';
-                    return;
-                }
-
-                const timeRemaining = data.time_remaining;
-
-                if (timeRemaining <= 0) {
-                    this.countdownEl.textContent = '⏰ TIME\'S UP';
-                    this.countdownEl.className = 'countdown urgent';
-                    this.statusEl.textContent = "⏰ Time's up! Push that commit!";
-                    this.statusEl.className = 'status';
-                    return;
-                }
-
-                const days = Math.floor(timeRemaining / 86400);
-                const hours = Math.floor((timeRemaining % 86400) / 3600);
-                const minutes = Math.floor((timeRemaining % 3600) / 60);
-                const seconds = timeRemaining % 60;
-
-                let timeString;
-                if (days > 0) {
-                    timeString = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            // Handle page visibility changes to optimize performance
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    this.pauseCountdown();
                 } else {
-                    timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    this.resumeCountdown();
                 }
+            });
+        }
 
-                this.countdownEl.textContent = timeString;
+        updateCountdown() {
+            // If goal is already completed, show completion state
+            if (this.goalData.status === 'completed') {
+                this.countdownEl.textContent = '🎉 DONE';
+                this.countdownEl.className = 'countdown completed';
+                this.statusEl.textContent = '✅ Commit verified. Well done!';
+                this.statusEl.className = 'status completed';
+                this.pauseCountdown(); // No need to keep updating
+                return;
+            }
 
-                // Add urgency styling and status messages based on time remaining
-                if (timeRemaining < 3600) { // Less than 1 hour
-                    this.countdownEl.className = 'countdown urgent';
-                    this.statusEl.textContent = `🔥 ${minutes}m ${seconds}s to ${data.completion_condition}`;
-                } else if (timeRemaining < 86400) { // Less than 1 day
-                    this.countdownEl.className = 'countdown';
-                    this.statusEl.textContent = `⚡ ${hours}h ${minutes}m to ${data.completion_condition}`;
-                } else {
-                    this.countdownEl.className = 'countdown';
-                    this.statusEl.textContent = `🎯 Deadline: ${new Date(data.deadline).toLocaleDateString()}`;
-                }
+            // Calculate time remaining using client-side time
+            const now = new Date();
+            const timeLeft = this.goalData.deadline - now;
+            const timeRemaining = Math.max(0, Math.floor(timeLeft / 1000)); // Convert to seconds
+
+            // Handle expired deadline
+            if (timeRemaining <= 0) {
+                this.countdownEl.textContent = '⏰ TIME\'S UP';
+                this.countdownEl.className = 'countdown urgent';
+                this.statusEl.textContent = "⏰ Time's up! Push that commit!";
                 this.statusEl.className = 'status';
+                return;
             }
 
-            handleUpdateError(error) {
-                console.error('Widget update error:', error);
-                this.retryCount++;
+            // Calculate time components
+            const days = Math.floor(timeRemaining / 86400);
+            const hours = Math.floor((timeRemaining % 86400) / 3600);
+            const minutes = Math.floor((timeRemaining % 3600) / 60);
+            const seconds = timeRemaining % 60;
 
-                if (this.retryCount <= this.maxRetries) {
-                    // Exponential backoff for retries
-                    const retryDelay = Math.min(1000 * Math.pow(2, this.retryCount - 1), 30000);
-                    console.log(`Retrying in ${retryDelay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
-
-                    setTimeout(() => {
-                        this.updateWidget();
-                    }, retryDelay);
-                } else {
-                    this.connectionLost = true;
-                    this.statusEl.textContent = '🔄 Connection lost - retrying...';
-                    this.statusEl.className = 'status error';
-
-                    // Reset retry count after a longer delay
-                    setTimeout(() => {
-                        this.retryCount = 0;
-                        this.updateWidget();
-                    }, 60000); // Retry after 1 minute
-                }
+            // Format time string
+            let timeString;
+            if (days > 0) {
+                timeString = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            } else {
+                timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             }
 
-            startUpdateLoop() {
-                this.updateInterval = setInterval(() => {
-                    // Check if connection has been lost for too long
-                    const timeSinceLastUpdate = Date.now() - this.lastSuccessfulUpdate;
-                    if (timeSinceLastUpdate > 120000) { // 2 minutes
-                        this.connectionLost = true;
-                    }
+            this.countdownEl.textContent = timeString;
 
-                    if (!this.connectionLost) {
-                        this.updateWidget();
-                    }
-                }, 1000);
+            // Update styling and status based on urgency
+            if (timeRemaining < 3600) { // Less than 1 hour
+                this.countdownEl.className = 'countdown urgent';
+                this.statusEl.textContent = `🔥 ${minutes}m ${seconds}s to ${this.goalData.completionCondition}`;
+            } else if (timeRemaining < 86400) { // Less than 1 day
+                this.countdownEl.className = 'countdown';
+                this.statusEl.textContent = `⚡ ${hours}h ${minutes}m to ${this.goalData.completionCondition}`;
+            } else if (timeRemaining < 604800) { // Less than 1 week
+                this.countdownEl.className = 'countdown';
+                this.statusEl.textContent = `📅 ${days} day${days > 1 ? 's' : ''} to ${this.goalData.completionCondition}`;
+            } else {
+                this.countdownEl.className = 'countdown';
+                this.statusEl.textContent = `🎯 Deadline: ${this.goalData.deadline.toLocaleDateString()}`;
             }
 
-            pauseUpdates() {
-                if (this.updateInterval) {
-                    clearInterval(this.updateInterval);
-                    this.updateInterval = null;
-                }
-            }
+            this.statusEl.className = 'status';
+        }
 
-            resumeUpdates() {
-                if (!this.updateInterval) {
-                    this.updateWidget(); // Immediate update when resuming
-                    this.startUpdateLoop();
-                }
+        startCountdownLoop() {
+            // Update every second for smooth countdown
+            this.updateInterval = setInterval(() => {
+                this.updateCountdown();
+            }, 1000);
+        }
+
+        pauseCountdown() {
+            if (this.updateInterval) {
+                clearInterval(this.updateInterval);
+                this.updateInterval = null;
             }
+        }
+
+        resumeCountdown() {
+            if (!this.updateInterval && this.goalData.status !== 'completed') {
+                this.updateCountdown(); // Immediate update when resuming
+                this.startCountdownLoop();
+            }
+        }
         }
 
         // Initialize the widget when DOM is loaded

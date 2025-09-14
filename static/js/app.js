@@ -222,8 +222,9 @@ class GitDoneApp {
         const updateCountdown = () => {
             const now = new Date();
             const timeLeft = deadline - now;
+            const timeRemaining = Math.max(0, Math.floor(timeLeft / 1000)); // Convert to seconds
 
-            if (timeLeft <= 0) {
+            if (timeRemaining <= 0) {
                 countdownElement.textContent = '⏰ TIME\'S UP';
                 countdownElement.classList.add('urgent');
                 document.getElementById(`status-${goal.id}`).textContent = "⏰ Time's up! Push that commit!";
@@ -232,10 +233,10 @@ class GitDoneApp {
                 return;
             }
 
-            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+            const days = Math.floor(timeRemaining / 86400);
+            const hours = Math.floor((timeRemaining % 86400) / 3600);
+            const minutes = Math.floor((timeRemaining % 3600) / 60);
+            const seconds = timeRemaining % 60;
 
             let displayText;
             if (days > 0) {
@@ -246,12 +247,16 @@ class GitDoneApp {
 
             countdownElement.textContent = displayText;
 
-            // Add urgency classes based on time remaining
-            if (timeLeft < 3600000) { // Less than 1 hour
+            // Add urgency classes and status messages based on time remaining
+            if (timeRemaining < 3600) { // Less than 1 hour
                 countdownElement.classList.add('urgent');
                 document.getElementById(`status-${goal.id}`).textContent = "🔥 Less than 1 hour left!";
-            } else if (timeLeft < 86400000) { // Less than 1 day
+            } else if (timeRemaining < 86400) { // Less than 1 day
                 document.getElementById(`status-${goal.id}`).textContent = "⚡ Less than 1 day left!";
+            } else if (timeRemaining < 604800) { // Less than 1 week
+                document.getElementById(`status-${goal.id}`).textContent = `📅 ${days} day${days > 1 ? 's' : ''} remaining`;
+            } else {
+                document.getElementById(`status-${goal.id}`).textContent = `🎯 Deadline: ${deadline.toLocaleDateString()}`;
             }
         };
 
