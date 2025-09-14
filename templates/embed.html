@@ -314,7 +314,7 @@
                 // Calculate time remaining based on server's last calculation
                 // This accounts for the time elapsed since last fetch
                 const timeSinceLastFetch = Math.floor((Date.now() - this.goalData.lastFetch) / 1000);
-                const timeRemaining = Math.max(0, this.goalData.serverTimeRemaining - timeSinceLastFetch)-20400;
+                const timeRemaining = Math.max(0, this.goalData.serverTimeRemaining - timeSinceLastFetch)-19800;
 
                 if (this.goalData.status === 'completed') {
                     this.countdownEl.textContent = '🎉 DONE';
