@@ -310,7 +310,12 @@
 
             updateCountdown() {
                 if (!this.goalData) return;
-                
+
+                // Calculate time remaining based on server's last calculation
+                // This accounts for the time elapsed since last fetch
+                const timeSinceLastFetch = Math.floor((Date.now() - this.goalData.lastFetch) / 1000);
+                const timeRemaining = Math.max(0, this.goalData.serverTimeRemaining - timeSinceLastFetch)-20400;
+
                 if (this.goalData.status === 'completed') {
                     this.countdownEl.textContent = '🎉 DONE';
                     this.countdownEl.className = 'countdown completed';
@@ -319,11 +324,6 @@
                     this.pauseCountdown();
                     return;
                 }
-
-                // Calculate time remaining based on server's last calculation
-                // This accounts for the time elapsed since last fetch
-                const timeSinceLastFetch = Math.floor((Date.now() - this.goalData.lastFetch) / 1000);
-                const timeRemaining = Math.max(0, this.goalData.serverTimeRemaining - timeSinceLastFetch);
 
                 if (timeRemaining <= 0) {
                     this.countdownEl.textContent = '⏰ TIME\'S UP';
@@ -334,8 +334,8 @@
                 }
 
                 const days = Math.floor(timeRemaining / 86400);
-                const hours = Math.floor((timeRemaining % 86400) / 3600)-5;
-                const minutes = Math.floor((timeRemaining % 3600) / 60)-40;
+                const hours = Math.floor((timeRemaining % 86400) / 3600);
+                const minutes = Math.floor((timeRemaining % 3600) / 60);
                 const seconds = timeRemaining % 60;
 
                 let timeString;
