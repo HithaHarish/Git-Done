@@ -288,20 +288,63 @@ def embed_data(token):
         time_remaining = max(0, int(time_left.total_seconds()))
         is_overdue = time_left.total_seconds() <= 0
     
-    response = jsonify({
+    response_data = {
         'description': goal.description,
         'deadline': goal.deadline.isoformat(),
         'status': goal.status,
         'time_remaining': time_remaining,
         'is_overdue': is_overdue,
         'completion_condition': goal.completion_condition,
-        'completed_at': goal.completed_at.isoformat() if goal.completed_at else None
-    })
+        'completed_at': goal.completed_at.isoformat() if goal.completed_at else None,
+        'last_updated': now.isoformat(),
+        'goal_id': goal.id
+    }
+    
+    response = jsonify(response_data)
+    
+    # CORS headers for cross-origin requests (important for Notion embeds)
     response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cache-Control, Pragma'
+    response.headers['Access-Control-Max-Age'] = '3600'
+    
+    # Cache control headers optimized for CloudFront
+    if goal.status == 'completed':
+        # Completed goals can be cached longer
+        response.headers['Cache-Control'] = 'public, max-age=3600, s-maxage=3600'
+    else:
+        # Active goals should not be cached to ensure real-time updates
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    
+    # Add ETag for better caching
+    import hashlib
+    etag_data = f"{goal.id}-{goal.status}-{time_remaining}-{goal.completed_at}"
+    etag = hashlib.md5(etag_data.encode()).hexdigest()
+    response.headers['ETag'] = f'"{etag}"'
     
     return response
+
+# Add OPTIONS handler for CORS preflight requests
+@application.route('/api/embed/<token>/data', methods=['OPTIONS'])
+def embed_data_options(token):
+    """Handle CORS preflight requests"""
+    response = make_response()
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cache-Control, Pragma'
+    response.headers['Access-Control-Max-Age'] = '3600'
+    return response
+
+@application.route('/api/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'service': 'git-done-api'
+    })
 
 if __name__ == '__main__':
     with application.app_context():

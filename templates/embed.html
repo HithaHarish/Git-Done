@@ -152,6 +152,12 @@
             font-weight: 600;
         }
 
+        .status.error {
+            color: var(--danger);
+            font-weight: 500;
+            animation: pulse 2s infinite;
+        }
+
         @keyframes pulse {
 
             0%,
@@ -240,68 +246,174 @@
     </div>
 
     <script>
-        const token = '{{ goal.embed_token }}';
-        const countdownEl = document.getElementById('countdown');
-        const statusEl = document.getElementById('status');
+        class EmbedWidget {
+            constructor() {
+                this.token = '{{ goal.embed_token }}';
+                this.countdownEl = document.getElementById('countdown');
+                this.statusEl = document.getElementById('status');
+                this.retryCount = 0;
+                this.maxRetries = 3;
+                this.updateInterval = null;
+                this.lastSuccessfulUpdate = Date.now();
+                this.connectionLost = false;
 
-        function updateWidget() {
-            fetch(`/api/embed/${token}/data`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'completed') {
-                        countdownEl.textContent = '🎉 DONE';
-                        countdownEl.className = 'countdown completed';
-                        statusEl.textContent = '✅ Commit verified. Well done!';
-                        statusEl.className = 'status completed';
-                        return;
-                    }
+                this.init();
+            }
 
-                    const timeRemaining = data.time_remaining;
+            init() {
+                this.updateWidget();
+                this.startUpdateLoop();
 
-                    if (timeRemaining <= 0) {
-                        countdownEl.textContent = '⏰ TIME\'S UP';
-                        countdownEl.className = 'countdown urgent';
-                        statusEl.textContent = "⏰ Time's up! Push that commit!";
-                        statusEl.className = 'status';
-                        return;
-                    }
-
-                    const days = Math.floor(timeRemaining / 86400);
-                    const hours = Math.floor((timeRemaining % 86400) / 3600);
-                    const minutes = Math.floor((timeRemaining % 3600) / 60);
-                    const seconds = timeRemaining % 60;
-
-                    let timeString;
-                    if (days > 0) {
-                        timeString = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                // Handle page visibility changes to optimize updates
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        this.pauseUpdates();
                     } else {
-                        timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                        this.resumeUpdates();
                     }
-
-                    countdownEl.textContent = timeString;
-
-                    // Add urgency styling and status messages based on time remaining
-                    if (timeRemaining < 3600) { // Less than 1 hour
-                        countdownEl.className = 'countdown urgent';
-                        statusEl.textContent = `🔥 ${minutes}m ${seconds}s to ${data.completion_condition}`;
-                    } else if (timeRemaining < 86400) { // Less than 1 day
-                        countdownEl.className = 'countdown';
-                        statusEl.textContent = `⚡ ${hours}h ${minutes}m to ${data.completion_condition}`;
-                    } else {
-                        countdownEl.className = 'countdown';
-                        statusEl.textContent = `🎯 Deadline: ${new Date(data.deadline).toLocaleDateString()}`;
-                    }
-                    statusEl.className = 'status';
-                })
-                .catch(error => {
-                    console.error('Error updating widget:', error);
-                    statusEl.textContent = 'Error loading data';
                 });
+            }
+
+            async updateWidget() {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+                    const response = await fetch(`/api/embed/${this.token}/data`, {
+                        signal: controller.signal,
+                        headers: {
+                            'Cache-Control': 'no-cache',
+                            'Pragma': 'no-cache'
+                        }
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    this.handleSuccessfulUpdate(data);
+
+                } catch (error) {
+                    this.handleUpdateError(error);
+                }
+            }
+
+            handleSuccessfulUpdate(data) {
+                this.retryCount = 0;
+                this.lastSuccessfulUpdate = Date.now();
+
+                if (this.connectionLost) {
+                    this.connectionLost = false;
+                    console.log('Connection restored');
+                }
+
+                if (data.status === 'completed') {
+                    this.countdownEl.textContent = '🎉 DONE';
+                    this.countdownEl.className = 'countdown completed';
+                    this.statusEl.textContent = '✅ Commit verified. Well done!';
+                    this.statusEl.className = 'status completed';
+                    return;
+                }
+
+                const timeRemaining = data.time_remaining;
+
+                if (timeRemaining <= 0) {
+                    this.countdownEl.textContent = '⏰ TIME\'S UP';
+                    this.countdownEl.className = 'countdown urgent';
+                    this.statusEl.textContent = "⏰ Time's up! Push that commit!";
+                    this.statusEl.className = 'status';
+                    return;
+                }
+
+                const days = Math.floor(timeRemaining / 86400);
+                const hours = Math.floor((timeRemaining % 86400) / 3600);
+                const minutes = Math.floor((timeRemaining % 3600) / 60);
+                const seconds = timeRemaining % 60;
+
+                let timeString;
+                if (days > 0) {
+                    timeString = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                    timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+
+                this.countdownEl.textContent = timeString;
+
+                // Add urgency styling and status messages based on time remaining
+                if (timeRemaining < 3600) { // Less than 1 hour
+                    this.countdownEl.className = 'countdown urgent';
+                    this.statusEl.textContent = `🔥 ${minutes}m ${seconds}s to ${data.completion_condition}`;
+                } else if (timeRemaining < 86400) { // Less than 1 day
+                    this.countdownEl.className = 'countdown';
+                    this.statusEl.textContent = `⚡ ${hours}h ${minutes}m to ${data.completion_condition}`;
+                } else {
+                    this.countdownEl.className = 'countdown';
+                    this.statusEl.textContent = `🎯 Deadline: ${new Date(data.deadline).toLocaleDateString()}`;
+                }
+                this.statusEl.className = 'status';
+            }
+
+            handleUpdateError(error) {
+                console.error('Widget update error:', error);
+                this.retryCount++;
+
+                if (this.retryCount <= this.maxRetries) {
+                    // Exponential backoff for retries
+                    const retryDelay = Math.min(1000 * Math.pow(2, this.retryCount - 1), 30000);
+                    console.log(`Retrying in ${retryDelay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
+
+                    setTimeout(() => {
+                        this.updateWidget();
+                    }, retryDelay);
+                } else {
+                    this.connectionLost = true;
+                    this.statusEl.textContent = '🔄 Connection lost - retrying...';
+                    this.statusEl.className = 'status error';
+
+                    // Reset retry count after a longer delay
+                    setTimeout(() => {
+                        this.retryCount = 0;
+                        this.updateWidget();
+                    }, 60000); // Retry after 1 minute
+                }
+            }
+
+            startUpdateLoop() {
+                this.updateInterval = setInterval(() => {
+                    // Check if connection has been lost for too long
+                    const timeSinceLastUpdate = Date.now() - this.lastSuccessfulUpdate;
+                    if (timeSinceLastUpdate > 120000) { // 2 minutes
+                        this.connectionLost = true;
+                    }
+
+                    if (!this.connectionLost) {
+                        this.updateWidget();
+                    }
+                }, 1000);
+            }
+
+            pauseUpdates() {
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                    this.updateInterval = null;
+                }
+            }
+
+            resumeUpdates() {
+                if (!this.updateInterval) {
+                    this.updateWidget(); // Immediate update when resuming
+                    this.startUpdateLoop();
+                }
+            }
         }
 
-        // Update immediately and then every second
-        updateWidget();
-        setInterval(updateWidget, 1000);
+        // Initialize the widget when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new EmbedWidget();
+        });
     </script>
 </body>
 
