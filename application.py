@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 application = Flask(__name__)
 
 #GitHub OAuth configuration
@@ -232,7 +231,7 @@ def create_goal():
     goal = Goal(
         user_github_id=user_id,
         description=data.get('description'),
-        deadline=datetime.fromisoformat(data.get('deadline')),
+        deadline=datetime.fromisoformat(data.get('deadline').replace('Z', '')),
         repo_url=data.get('repo_url'),
         completion_condition=data.get('completion_condition'),
         repo_owner=repo_owner,
@@ -278,26 +277,28 @@ def embed_data(token):
     if not goal:
         return jsonify({'error': 'Goal not found'}), 404
     
-    # Calculate time remaining
-    now = datetime.utcnow()
+    # Calculate time remaining using UTC (universal)
+    now_utc = datetime.utcnow()
+    
     if goal.status == 'completed':
         time_remaining = 0
         is_overdue = False
     else:
-        time_left = goal.deadline - now
+        time_left = goal.deadline - now_utc
         time_remaining = max(0, int(time_left.total_seconds()))
         is_overdue = time_left.total_seconds() <= 0
     
     response_data = {
         'description': goal.description,
-        'deadline': goal.deadline.isoformat(),
+        'deadline': goal.deadline.isoformat() + 'Z',  # UTC with Z suffix
         'status': goal.status,
         'time_remaining': time_remaining,
         'is_overdue': is_overdue,
         'completion_condition': goal.completion_condition,
-        'completed_at': goal.completed_at.isoformat() if goal.completed_at else None,
-        'last_updated': now.isoformat(),
-        'goal_id': goal.id
+        'completed_at': goal.completed_at.isoformat() + 'Z' if goal.completed_at else None,
+        'last_updated': now_utc.isoformat() + 'Z',  # UTC with Z suffix
+        'goal_id': goal.id,
+        'server_time_utc': now_utc.isoformat() + 'Z'
     }
     
     response = jsonify(response_data)

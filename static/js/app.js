@@ -3,7 +3,7 @@ class GitDoneApp {
     constructor() {
         this.goals = [];
         this.countdownIntervals = new Map();
-        
+
         // Check if the dashboard exists on the page (i.e., user is logged in)
         if (document.getElementById('dashboard')) {
             this.bindEvents();
@@ -21,13 +21,13 @@ class GitDoneApp {
     async createGoal() {
         const form = document.getElementById('goal-form');
         const submitButton = form.querySelector('button[type="submit"]');
-        
+
         // Add loading state
         const originalText = submitButton.textContent;
         submitButton.textContent = '🚀 Creating...';
         submitButton.disabled = true;
         submitButton.classList.add('loading');
-        
+
         // The backend knows the user, so we don't need to send user_github_id
         const goalData = {
             description: document.getElementById('description').value,
@@ -51,7 +51,7 @@ class GitDoneApp {
                 this.goals.unshift(newGoal); // Add to beginning for newest first
                 this.renderGoals();
                 form.reset();
-                
+
                 // Show success feedback
                 this.showNotification('🎉 Goal created successfully!', 'success');
             } else {
@@ -153,7 +153,7 @@ class GitDoneApp {
         const widget = document.createElement('div');
         widget.className = 'goal-widget card fade-in-up';
         widget.id = `goal-${goal.id}`;
-        
+
         let statusText = '⏱️ Counting down...';
         let statusClass = '';
         if (goal.status === 'completed') {
@@ -166,7 +166,7 @@ class GitDoneApp {
 
         const embedUrl = goal.embed_url || 'Not available';
         const repoName = goal.repo_url.split('/').slice(-2).join('/');
-        
+
         widget.innerHTML = `
             <h3>${goal.description}</h3>
             <p style="margin-bottom: 1.5rem;">
@@ -184,7 +184,7 @@ class GitDoneApp {
 
         // Add copy functionality to embed URL input
         const embedInput = widget.querySelector('input[readonly]');
-        embedInput.addEventListener('click', function() {
+        embedInput.addEventListener('click', function () {
             this.select();
             navigator.clipboard.writeText(this.value).then(() => {
                 // Show temporary feedback
@@ -220,6 +220,7 @@ class GitDoneApp {
         console.log(`Starting countdown for goal ${goal.id}, deadline: ${deadline}`);
 
         const updateCountdown = () => {
+            // Using UTC-based calculation for global compatibility
             const now = new Date();
             const timeLeft = deadline - now;
             const timeRemaining = Math.max(0, Math.floor(timeLeft / 1000)); // Convert to seconds
@@ -264,7 +265,7 @@ class GitDoneApp {
         if (this.countdownIntervals.has(goal.id)) {
             clearInterval(this.countdownIntervals.get(goal.id));
         }
-        
+
         updateCountdown();
         const interval = setInterval(updateCountdown, 1000);
         this.countdownIntervals.set(goal.id, interval);
@@ -281,7 +282,7 @@ class ThemeManager {
     init() {
         // Set initial theme
         document.documentElement.setAttribute('data-theme', this.currentTheme);
-        
+
         // Bind toggle button
         const toggleButton = document.getElementById('theme-toggle');
         if (toggleButton) {
@@ -293,7 +294,7 @@ class ThemeManager {
         this.currentTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', this.currentTheme);
         localStorage.setItem('theme', this.currentTheme);
-        
+
         // Add a subtle animation effect
         document.body.style.transition = 'all 0.3s ease';
         setTimeout(() => {

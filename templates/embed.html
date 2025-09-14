@@ -270,18 +270,16 @@
                         }
                     });
                     
-                    // Refresh goal data every 5 minutes to check for completion
+                    // Refresh goal data every 30 seconds to stay synchronized
                     setInterval(() => {
                         this.fetchGoalData();
-                    }, 300000);
+                    }, 30000);
                 }
             }
 
             async fetchGoalData() {
                 try {
-                    const fetchStart = Date.now();
                     const response = await fetch(`/api/embed/${this.token}/data`);
-                    const fetchEnd = Date.now();
                     
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
@@ -289,19 +287,19 @@
                     
                     const data = await response.json();
                     
-                    // Calculate server time offset
-                    const roundTripTime = fetchEnd - fetchStart;
-                    const serverTime = new Date(data.last_updated).getTime();
-                    const clientTime = fetchEnd - (roundTripTime / 2);
-                    this.serverTimeOffset = serverTime - clientTime;
-                    
+                    // Use the server's calculated time_remaining for perfect sync
+                    // This eliminates timezone and network latency issues
                     this.goalData = {
                         description: data.description,
                         deadline: new Date(data.deadline),
                         status: data.status,
                         completionCondition: data.completion_condition,
-                        completedAt: data.completed_at ? new Date(data.completed_at) : null
+                        completedAt: data.completed_at ? new Date(data.completed_at) : null,
+                        serverTimeRemaining: data.time_remaining,
+                        lastFetch: Date.now()
                     };
+                    
+                    console.log(`Goal data fetched. Server time remaining: ${data.time_remaining}s`);
                     
                 } catch (error) {
                     console.error('Error fetching goal data:', error);
@@ -322,10 +320,10 @@
                     return;
                 }
 
-                // Use server-synchronized time
-                const now = new Date(Date.now() + this.serverTimeOffset);
-                const timeLeft = this.goalData.deadline - now;
-                const timeRemaining = Math.max(0, Math.floor(timeLeft / 1000));
+                // Calculate time remaining based on server's last calculation
+                // This accounts for the time elapsed since last fetch
+                const timeSinceLastFetch = Math.floor((Date.now() - this.goalData.lastFetch) / 1000);
+                const timeRemaining = Math.max(0, this.goalData.serverTimeRemaining - timeSinceLastFetch);
 
                 if (timeRemaining <= 0) {
                     this.countdownEl.textContent = '⏰ TIME\'S UP';
