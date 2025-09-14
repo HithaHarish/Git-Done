@@ -334,8 +334,8 @@
                 }
 
                 const days = Math.floor(timeRemaining / 86400);
-                const hours = Math.floor((timeRemaining % 86400) / 3600);
-                const minutes = Math.floor((timeRemaining % 3600) / 60);
+                const hours = Math.floor((timeRemaining % 86400) / 3600)-5;
+                const minutes = Math.floor((timeRemaining % 3600) / 60)-40;
                 const seconds = timeRemaining % 60;
 
                 let timeString;
