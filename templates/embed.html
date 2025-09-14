@@ -58,7 +58,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background:
+            background: 
                 radial-gradient(circle at 20% 80%, var(--accent-glow) 0%, transparent 50%),
                 radial-gradient(circle at 80% 20%, var(--danger-glow) 0%, transparent 50%);
             pointer-events: none;
@@ -159,15 +159,12 @@
         }
 
         @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
+            0%, 100% { 
+                opacity: 1; 
                 transform: scale(1);
             }
-
-            50% {
-                opacity: 0.8;
+            50% { 
+                opacity: 0.8; 
                 transform: scale(1.02);
             }
         }
@@ -177,7 +174,6 @@
                 opacity: 0;
                 transform: translateY(30px);
             }
-
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -248,120 +244,147 @@
     <script>
         class EmbedWidget {
             constructor() {
-                // Get goal data from server-side rendering - no API calls needed!
-                this.goalData = {
-                    description: '{{ goal.description }}',
-                    deadline: new Date('{{ goal.deadline.isoformat() }}'),
-                    status: '{{ goal.status }}',
-                    completionCondition: '{{ goal.completion_condition }}',
-                    completedAt: {{ 'new Date("' + goal.completed_at.isoformat() + '")' if goal.completed_at else 'null' }
-            }
-        };
-
-        this.countdownEl = document.getElementById('countdown');
-        this.statusEl = document.getElementById('status');
-        this.updateInterval = null;
-
-        this.init();
-            }
-
-        init() {
-            // Start the countdown immediately
-            this.updateCountdown();
-            this.startCountdownLoop();
-
-            // Handle page visibility changes to optimize performance
-            document.addEventListener('visibilitychange', () => {
-                if (document.hidden) {
-                    this.pauseCountdown();
-                } else {
-                    this.resumeCountdown();
-                }
-            });
-        }
-
-        updateCountdown() {
-            // If goal is already completed, show completion state
-            if (this.goalData.status === 'completed') {
-                this.countdownEl.textContent = '🎉 DONE';
-                this.countdownEl.className = 'countdown completed';
-                this.statusEl.textContent = '✅ Commit verified. Well done!';
-                this.statusEl.className = 'status completed';
-                this.pauseCountdown(); // No need to keep updating
-                return;
-            }
-
-            // Calculate time remaining using client-side time
-            const now = new Date();
-            const timeLeft = this.goalData.deadline - now;
-            const timeRemaining = Math.max(0, Math.floor(timeLeft / 1000)); // Convert to seconds
-
-            // Handle expired deadline
-            if (timeRemaining <= 0) {
-                this.countdownEl.textContent = '⏰ TIME\'S UP';
-                this.countdownEl.className = 'countdown urgent';
-                this.statusEl.textContent = "⏰ Time's up! Push that commit!";
-                this.statusEl.className = 'status';
-                return;
-            }
-
-            // Calculate time components
-            const days = Math.floor(timeRemaining / 86400);
-            const hours = Math.floor((timeRemaining % 86400) / 3600);
-            const minutes = Math.floor((timeRemaining % 3600) / 60);
-            const seconds = timeRemaining % 60;
-
-            // Format time string
-            let timeString;
-            if (days > 0) {
-                timeString = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            } else {
-                timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            }
-
-            this.countdownEl.textContent = timeString;
-
-            // Update styling and status based on urgency
-            if (timeRemaining < 3600) { // Less than 1 hour
-                this.countdownEl.className = 'countdown urgent';
-                this.statusEl.textContent = `🔥 ${minutes}m ${seconds}s to ${this.goalData.completionCondition}`;
-            } else if (timeRemaining < 86400) { // Less than 1 day
-                this.countdownEl.className = 'countdown';
-                this.statusEl.textContent = `⚡ ${hours}h ${minutes}m to ${this.goalData.completionCondition}`;
-            } else if (timeRemaining < 604800) { // Less than 1 week
-                this.countdownEl.className = 'countdown';
-                this.statusEl.textContent = `📅 ${days} day${days > 1 ? 's' : ''} to ${this.goalData.completionCondition}`;
-            } else {
-                this.countdownEl.className = 'countdown';
-                this.statusEl.textContent = `🎯 Deadline: ${this.goalData.deadline.toLocaleDateString()}`;
-            }
-
-            this.statusEl.className = 'status';
-        }
-
-        startCountdownLoop() {
-            // Update every second for smooth countdown
-            this.updateInterval = setInterval(() => {
-                this.updateCountdown();
-            }, 1000);
-        }
-
-        pauseCountdown() {
-            if (this.updateInterval) {
-                clearInterval(this.updateInterval);
+                this.token = '{{ goal.embed_token }}';
+                this.countdownEl = document.getElementById('countdown');
+                this.statusEl = document.getElementById('status');
                 this.updateInterval = null;
+                this.goalData = null;
+                this.serverTimeOffset = 0;
+                
+                this.init();
+            }
+
+            async init() {
+                // Fetch goal data once and sync with server time
+                await this.fetchGoalData();
+                
+                if (this.goalData) {
+                    this.startCountdownLoop();
+                    
+                    // Handle page visibility changes
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            this.pauseCountdown();
+                        } else {
+                            this.resumeCountdown();
+                        }
+                    });
+                    
+                    // Refresh goal data every 5 minutes to check for completion
+                    setInterval(() => {
+                        this.fetchGoalData();
+                    }, 300000);
+                }
+            }
+
+            async fetchGoalData() {
+                try {
+                    const fetchStart = Date.now();
+                    const response = await fetch(`/api/embed/${this.token}/data`);
+                    const fetchEnd = Date.now();
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    // Calculate server time offset
+                    const roundTripTime = fetchEnd - fetchStart;
+                    const serverTime = new Date(data.last_updated).getTime();
+                    const clientTime = fetchEnd - (roundTripTime / 2);
+                    this.serverTimeOffset = serverTime - clientTime;
+                    
+                    this.goalData = {
+                        description: data.description,
+                        deadline: new Date(data.deadline),
+                        status: data.status,
+                        completionCondition: data.completion_condition,
+                        completedAt: data.completed_at ? new Date(data.completed_at) : null
+                    };
+                    
+                } catch (error) {
+                    console.error('Error fetching goal data:', error);
+                    this.statusEl.textContent = 'Error loading data';
+                    this.statusEl.className = 'status error';
+                }
+            }
+
+            updateCountdown() {
+                if (!this.goalData) return;
+                
+                if (this.goalData.status === 'completed') {
+                    this.countdownEl.textContent = '🎉 DONE';
+                    this.countdownEl.className = 'countdown completed';
+                    this.statusEl.textContent = '✅ Commit verified. Well done!';
+                    this.statusEl.className = 'status completed';
+                    this.pauseCountdown();
+                    return;
+                }
+
+                // Use server-synchronized time
+                const now = new Date(Date.now() + this.serverTimeOffset);
+                const timeLeft = this.goalData.deadline - now;
+                const timeRemaining = Math.max(0, Math.floor(timeLeft / 1000));
+
+                if (timeRemaining <= 0) {
+                    this.countdownEl.textContent = '⏰ TIME\'S UP';
+                    this.countdownEl.className = 'countdown urgent';
+                    this.statusEl.textContent = "⏰ Time's up! Push that commit!";
+                    this.statusEl.className = 'status';
+                    return;
+                }
+
+                const days = Math.floor(timeRemaining / 86400);
+                const hours = Math.floor((timeRemaining % 86400) / 3600);
+                const minutes = Math.floor((timeRemaining % 3600) / 60);
+                const seconds = timeRemaining % 60;
+
+                let timeString;
+                if (days > 0) {
+                    timeString = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                    timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+
+                this.countdownEl.textContent = timeString;
+
+                if (timeRemaining < 3600) {
+                    this.countdownEl.className = 'countdown urgent';
+                    this.statusEl.textContent = `🔥 ${minutes}m ${seconds}s to ${this.goalData.completionCondition}`;
+                } else if (timeRemaining < 86400) {
+                    this.countdownEl.className = 'countdown';
+                    this.statusEl.textContent = `⚡ ${hours}h ${minutes}m to ${this.goalData.completionCondition}`;
+                } else {
+                    this.countdownEl.className = 'countdown';
+                    this.statusEl.textContent = `🎯 Deadline: ${this.goalData.deadline.toLocaleDateString()}`;
+                }
+                
+                this.statusEl.className = 'status';
+            }
+
+            startCountdownLoop() {
+                this.updateInterval = setInterval(() => {
+                    this.updateCountdown();
+                }, 1000);
+                
+                this.updateCountdown();
+            }
+
+            pauseCountdown() {
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                    this.updateInterval = null;
+                }
+            }
+
+            resumeCountdown() {
+                if (!this.updateInterval && this.goalData && this.goalData.status !== 'completed') {
+                    this.startCountdownLoop();
+                }
             }
         }
 
-        resumeCountdown() {
-            if (!this.updateInterval && this.goalData.status !== 'completed') {
-                this.updateCountdown(); // Immediate update when resuming
-                this.startCountdownLoop();
-            }
-        }
-        }
-
-        // Initialize the widget when DOM is loaded
         document.addEventListener('DOMContentLoaded', () => {
             new EmbedWidget();
         });
