@@ -58,8 +58,19 @@ The project uses Kiro for development assistance:
 - **Hooks**: Automated workflows in `.kiro/hooks/`
 - **Steering**: Project guidelines in `.kiro/steering/`
 
-## License
+## Contributing
 
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on:
+
+- Development workflow and setup
+- Code quality standards
+- AWS architecture protection
+- Hacktoberfest participation
+- MIT License compliance
+
+Whether you're fixing bugs, adding features, or improving documentation, your contributions help make Git-Done better for everyone.
+
+## License
 
 MIT License - Build something awesome.
 
