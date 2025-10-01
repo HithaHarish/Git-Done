@@ -16,6 +16,23 @@ class GitDoneApp {
             e.preventDefault();
             this.createGoal();
         });
+        
+        // Add event listener for completion type change
+        const completionTypeSelect = document.getElementById('completion-type');
+        const completionConditionInput = document.getElementById('completion-condition');
+        const completionHint = document.getElementById('completion-hint');
+        
+        if (completionTypeSelect && completionConditionInput && completionHint) {
+            completionTypeSelect.addEventListener('change', (e) => {
+                if (e.target.value === 'issue') {
+                    completionConditionInput.placeholder = 'Issue number (e.g., 42 or #42)';
+                    completionHint.textContent = 'Enter the issue number that must be closed (e.g., 42 or #42)';
+                } else {
+                    completionConditionInput.placeholder = 'Completion tag (e.g., #feature-complete)';
+                    completionHint.textContent = 'Enter a commit message tag (e.g., #feature-complete)';
+                }
+            });
+        }
     }
 
     async createGoal() {
@@ -33,7 +50,8 @@ class GitDoneApp {
             description: document.getElementById('description').value,
             deadline: document.getElementById('deadline').value,
             repo_url: document.getElementById('repo-url').value,
-            completion_condition: document.getElementById('completion-condition').value
+            completion_condition: document.getElementById('completion-condition').value,
+            completion_type: document.getElementById('completion-type').value
         };
 
         try {
@@ -166,12 +184,20 @@ class GitDoneApp {
 
         const embedUrl = goal.embed_url || 'Not available';
         const repoName = goal.repo_url.split('/').slice(-2).join('/');
+        
+        // Determine completion type display
+        const completionTypeDisplay = goal.completion_type === 'issue' 
+            ? `🎫 Complete when issue ${goal.completion_condition} is closed`
+            : `💬 Complete with commit message: ${goal.completion_condition}`;
 
         widget.innerHTML = `
             <h3>${goal.description}</h3>
             <p style="margin-bottom: 1.5rem;">
                 <strong>📁 Repository:</strong> 
                 <a href="${goal.repo_url}" target="_blank" rel="noopener noreferrer">${repoName}</a>
+            </p>
+            <p style="margin-bottom: 1rem; color: var(--text-secondary);">
+                ${completionTypeDisplay}
             </p>
             <div class="countdown ${goal.status === 'completed' ? 'completed' : ''}" id="countdown-${goal.id}">--:--:--</div>
             <div class="goal-status ${statusClass}" id="status-${goal.id}">${statusText}</div>

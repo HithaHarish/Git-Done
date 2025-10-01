@@ -38,6 +38,7 @@ class Goal(db.Model):
     deadline = db.Column(db.DateTime, nullable=False)
     repo_url = db.Column(db.String(500), nullable=False)
     completion_condition = db.Column(db.String(200), nullable=False)
+    completion_type = db.Column(db.String(20), default='commit', nullable=False)  # 'commit' or 'issue'
     status = db.Column(db.String(20), default='active')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
@@ -55,6 +56,7 @@ class Goal(db.Model):
             'deadline': self.deadline.isoformat(),
             'repo_url': self.repo_url,
             'completion_condition': self.completion_condition,
+            'completion_type': self.completion_type,
             'status': self.status,
             'created_at': self.created_at.isoformat(),
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
@@ -76,7 +78,7 @@ def create_github_webhook(access_token, owner, repo, webhook_url, secret):
             'content_type':'json',
             'secret':secret
         },
-        'events':['push']
+        'events':['push', 'issues']
     }
     response = requests.post(api_url,json = payload,headers = headers)
     if response.status_code == 201:
@@ -114,18 +116,24 @@ def github_webhook():
         return jsonify({'error': 'Invalid signature. Request rejected.'}), 403
 
     payload = request.get_json()
-    if request.headers.get('X-GitHub-Event') == 'push':
+    event_type = request.headers.get('X-GitHub-Event')
+    
+    # Handle push events (commit messages)
+    if event_type == 'push':
         repo_full_name = payload.get('repository', {}).get('full_name')
         if not repo_full_name:
             return jsonify({'status': 'Payload missing repository name'}), 400
+        
+        repo_owner, repo_name = repo_full_name.split('/')
         goal = Goal.query.filter_by(
-            repo_owner=repo_full_name.split('/')[0], 
-            repo_name=repo_full_name.split('/')[1], 
-            status='active'
+            repo_owner=repo_owner, 
+            repo_name=repo_name, 
+            status='active',
+            completion_type='commit'
         ).first()
 
         if not goal:
-            return jsonify({'status': 'No active goal for this repository'}), 200
+            return jsonify({'status': 'No active goal for this repository with commit completion type'}), 200
 
         for commit in payload.get('commits', []):
             commit_message = commit.get('message', '')
@@ -135,6 +143,34 @@ def github_webhook():
                 goal.completed_at = datetime.utcnow()
                 db.session.commit()
                 break # Stop checking other commits in this push
+    
+    # Handle issues events
+    elif event_type == 'issues':
+        action = payload.get('action')
+        if action == 'closed':
+            repo_full_name = payload.get('repository', {}).get('full_name')
+            issue_number = payload.get('issue', {}).get('number')
+            
+            if not repo_full_name or not issue_number:
+                return jsonify({'status': 'Payload missing repository or issue information'}), 400
+            
+            repo_owner, repo_name = repo_full_name.split('/')
+            goal = Goal.query.filter_by(
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                status='active',
+                completion_type='issue'
+            ).first()
+            
+            if not goal:
+                return jsonify({'status': 'No active goal for this repository with issue completion type'}), 200
+            
+            # Check if the closed issue number matches the completion condition
+            if str(issue_number) == goal.completion_condition or f"#{issue_number}" == goal.completion_condition:
+                print(f"Issue #{issue_number} closed! Goal {goal.id} completed.")
+                goal.status = 'completed'
+                goal.completed_at = datetime.utcnow()
+                db.session.commit()
 
     return jsonify({'status': 'received'}), 200
 
@@ -228,12 +264,18 @@ def create_goal():
         return jsonify({'error':'Invalid repository URL. Use format: https://github.com/owner/repo'}),400
     embed_token = secrets.token_urlsafe(16)
     
+    # Get completion_type from request, default to 'commit' for backward compatibility
+    completion_type = data.get('completion_type', 'commit')
+    if completion_type not in ['commit', 'issue']:
+        return jsonify({'error':'Invalid completion_type. Must be "commit" or "issue"'}),400
+    
     goal = Goal(
         user_github_id=user_id,
         description=data.get('description'),
         deadline=datetime.fromisoformat(data.get('deadline').replace('Z', '')),
         repo_url=data.get('repo_url'),
         completion_condition=data.get('completion_condition'),
+        completion_type=completion_type,
         repo_owner=repo_owner,
         repo_name=repo_name,
         embed_token=embed_token
