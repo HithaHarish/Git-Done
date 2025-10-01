@@ -97,6 +97,13 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
+@application.route('/service-worker.js')
+def service_worker():
+    response = make_response(application.send_static_file('service-worker.js'))
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
 @application.route('/api/github-webhook', methods=['POST'])
 def github_webhook():
     """Handle and verify GitHub webhook events."""

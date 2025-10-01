@@ -826,3 +826,89 @@ a:focus-visible {
         --border: #999999;
     }
 }
+
+/* PWA Specific Styles */
+#pwa-install-btn {
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 1000 !important;
+    opacity: 0.95 !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    box-shadow: var(--shadow-lg) !important;
+    border: 1px solid var(--glass-border) !important;
+    background: var(--glass-bg) !important;
+    animation: pwa-install-pulse 2s infinite;
+    display: none;
+}
+
+#pwa-install-btn:hover {
+    opacity: 1 !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25) !important;
+}
+
+@keyframes pwa-install-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.pwa-update-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--accent);
+    color: white;
+    padding: 12px 16px;
+    border-radius: var(--border-radius-sm);
+    z-index: 1001;
+    font-size: 14px;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    animation: slideInRight 0.3s ease-out;
+}
+
+.pwa-update-notification button {
+    margin-left: 8px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: var(--transition);
+}
+
+.pwa-update-notification button:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* PWA Display Mode Support */
+@media all and (display-mode: standalone) {
+    body {
+        /* Add padding-top for status bar when in standalone mode */
+        padding-top: env(safe-area-inset-top);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    /* Hide install button when already installed */
+    #pwa-install-btn {
+        display: none !important;
+    }
+}
