@@ -1,4 +1,4 @@
-# Git-Done
+# Git-It-Done
 
 A minimalist, deadline-driven productivity widget for developers. Connect your GitHub activity to accountability timers that only stop when you ship.
 
@@ -62,3 +62,4 @@ The project uses Kiro for development assistance:
 
 
 MIT License - Build something awesome.
+
