@@ -1,4 +1,4 @@
-# Git-It-Done
+# Git-Done
 
 A minimalist, deadline-driven productivity widget for developers. Connect your GitHub activity to accountability timers that only stop when you ship.
 
@@ -23,10 +23,10 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
 
 2. **Run the application**:
    ```bash
-   python app.py
+   python application.py
    ```
 
-3. **Open your browser**:
+3. **Open locally in your browser**:
    Navigate to `http://localhost:5000`
 
 ## Usage
@@ -62,4 +62,5 @@ The project uses Kiro for development assistance:
 
 
 MIT License - Build something awesome.
+
 
