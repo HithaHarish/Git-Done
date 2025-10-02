@@ -326,8 +326,114 @@ class ThemeManager {
     }
 }
 
+// PWA Service Worker Registration
+class PWAManager {
+    constructor() {
+        this.registerServiceWorker();
+        this.handleInstallPrompt();
+    }
+
+    async registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.register('/service-worker.js');
+                console.log('PWA: Service Worker registered successfully', registration);
+                
+                // Listen for updates
+                registration.addEventListener('updatefound', () => {
+                    console.log('PWA: New service worker version available');
+                    const newWorker = registration.installing;
+                    
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // Show update notification
+                            this.showUpdateNotification();
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('PWA: Service Worker registration failed', error);
+            }
+        } else {
+            console.log('PWA: Service Worker not supported');
+        }
+    }
+
+    handleInstallPrompt() {
+        let deferredPrompt;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('PWA: Install prompt available');
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show custom install button (optional)
+            this.showInstallButton(deferredPrompt);
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA: App installed successfully');
+            deferredPrompt = null;
+            this.hideInstallButton();
+        });
+    }
+
+    showInstallButton(deferredPrompt) {
+        // Create install button if it doesn't exist
+        let installButton = document.getElementById('pwa-install-btn');
+        if (!installButton) {
+            installButton = document.createElement('button');
+            installButton.id = 'pwa-install-btn';
+            installButton.className = 'btn-secondary';
+            installButton.innerHTML = '📱 Install App';
+            
+            installButton.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    console.log('PWA: Install prompt outcome:', outcome);
+                    deferredPrompt = null;
+                    this.hideInstallButton();
+                }
+            });
+            
+            document.body.appendChild(installButton);
+        }
+        
+        installButton.style.display = 'block';
+    }
+
+    hideInstallButton() {
+        const installButton = document.getElementById('pwa-install-btn');
+        if (installButton) {
+            installButton.style.display = 'none';
+        }
+    }
+
+    showUpdateNotification() {
+        // Simple update notification
+        const notification = document.createElement('div');
+        notification.className = 'pwa-update-notification';
+        notification.innerHTML = `
+            📱 App updated! Refresh to get the latest version.
+            <button onclick="window.location.reload()">Refresh</button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+    }
+}
+
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new GitDoneApp();
     new ThemeManager();
+    new PWAManager();
 });
