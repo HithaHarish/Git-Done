@@ -364,14 +364,6 @@ class PWAManager {
             installButton.id = 'pwa-install-btn';
             installButton.className = 'btn-secondary';
             installButton.innerHTML = '📱 Install App';
-            installButton.style.cssText = `
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                z-index: 1000;
-                opacity: 0.9;
-                backdrop-filter: blur(10px);
-            `;
             
             installButton.addEventListener('click', async () => {
                 if (deferredPrompt) {
@@ -399,21 +391,10 @@ class PWAManager {
     showUpdateNotification() {
         // Simple update notification
         const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--primary-color);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            z-index: 1001;
-            font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        `;
+        notification.className = 'pwa-update-notification';
         notification.innerHTML = `
             📱 App updated! Refresh to get the latest version.
-            <button onclick="window.location.reload()" style="margin-left: 8px; background: rgba(255,255,255,0.2); border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Refresh</button>
+            <button onclick="window.location.reload()">Refresh</button>
         `;
         
         document.body.appendChild(notification);
