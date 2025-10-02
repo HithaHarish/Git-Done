@@ -9,6 +9,7 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
 ## Features
 
 - **GitHub Integration**: OAuth login and webhook-based goal verification
+- **Dual Completion Methods**: Complete goals via commit messages OR issue closure
 - **Minimalist Design**: Dark mode, glassmorphism, clean typography
 - **Real-time Countdowns**: Monospaced timers that create focus
 - **Embeddable Widgets**: Share your accountability publicly

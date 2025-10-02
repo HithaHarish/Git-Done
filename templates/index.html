@@ -68,6 +68,13 @@
                                 <input type="url" id="repo-url" placeholder="https://github.com/username/repository" required>
                             </div>
                             <div class="input-group">
+                                <label for="completion-type" class="input-label">Completion Type</label>
+                                <select id="completion-type" required>
+                                    <option value="commit">Commit Message</option>
+                                    <option value="issue">Issue Closed</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
                                 <input type="text" id="completion-condition" placeholder="Completion tag (e.g., #feature-complete)" required>
                             </div>
                             <button type="submit" class="btn-primary">
