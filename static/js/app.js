@@ -20,16 +20,13 @@ class GitDoneApp {
         // Add event listener for completion type change
         const completionTypeSelect = document.getElementById('completion-type');
         const completionConditionInput = document.getElementById('completion-condition');
-        const completionHint = document.getElementById('completion-hint');
         
-        if (completionTypeSelect && completionConditionInput && completionHint) {
+        if (completionTypeSelect && completionConditionInput) {
             completionTypeSelect.addEventListener('change', (e) => {
                 if (e.target.value === 'issue') {
                     completionConditionInput.placeholder = 'Issue number (e.g., 42 or #42)';
-                    completionHint.textContent = 'Enter the issue number that must be closed (e.g., 42 or #42)';
                 } else {
                     completionConditionInput.placeholder = 'Completion tag (e.g., #feature-complete)';
-                    completionHint.textContent = 'Enter a commit message tag (e.g., #feature-complete)';
                 }
             });
         }
