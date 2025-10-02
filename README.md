@@ -29,6 +29,35 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
 3. **Open locally in your browser**:
    Navigate to `http://localhost:5000`
 
+## Testing
+
+The project includes automated tests using pytest to ensure code quality and prevent regressions.
+
+### Running Tests
+
+1. **Install test dependencies** (included in requirements.txt):
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run the test suite**:
+   ```bash
+   pytest
+   ```
+
+3. **Run tests with coverage**:
+   ```bash
+   pytest --cov=application --cov-report=html
+   ```
+
+### Test Structure
+
+- `tests/test_api.py`: API endpoint tests (health check, etc.)
+- `tests/test_models.py`: Model unit tests (Goal.to_dict(), etc.)
+- `tests/conftest.py`: Shared fixtures for Flask app and database setup
+
+Tests use an in-memory SQLite database for isolation and speed.
+
 ## Usage
 
 1. **Login with GitHub** - Authenticate via OAuth2
