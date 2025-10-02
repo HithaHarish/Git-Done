@@ -33,19 +33,34 @@ Git-Done is a minimalist, deadline-driven productivity widget for developers tha
 
 ## Development Workflow
 
+### Issue Assignment Policy
+
+**⚠️ IMPORTANT: Only work on issues that are assigned to you**
+
+- **Request Assignment First**: Comment on an issue asking to be assigned before starting work
+- **Wait for Assignment**: Do not begin work until a maintainer assigns the issue to you
+- **Respect the Queue**: If someone else is already assigned or has requested assignment, please find another issue
+- **Fair Contribution**: This policy ensures fairness for all contributors and prevents duplicate work
+- **Unassigned Work**: PRs for unassigned issues may be closed, even if the work is good quality
+
+**Exception**: You may work on issues labeled `good first issue` or `help wanted` without assignment, but please comment your intent first.
+
 ### Getting Started
 
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
+1. **Find an Issue**: Browse open issues and find one that interests you
+2. **Request Assignment**: Comment on the issue asking to be assigned
+3. **Wait for Confirmation**: A maintainer will assign the issue to you
+4. **Fork the repository** on GitHub
+5. **Clone your fork** locally:
    ```bash
    git clone https://github.com/[your-username]/git-done.git
    cd git-done
    ```
-3. **Install dependencies**:
+6. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
-4. **Run the application**:
+7. **Run the application**:
    ```bash
    python application.py
    ```
@@ -54,19 +69,22 @@ Git-Done is a minimalist, deadline-driven productivity widget for developers tha
 
 1. **Create a feature branch** from main:
    ```bash
-   git checkout -b feature/amazing-feature
+   git checkout -b feature/issue-123-amazing-feature
    ```
 2. **Make your changes** following the code quality guidelines
 3. **Test thoroughly** - ensure your changes work as expected
 4. **Commit with descriptive messages**:
    ```bash
-   git commit -m 'Add amazing feature that improves user experience'
+   git commit -m 'Fix: Add amazing feature that improves user experience (#123)'
    ```
 5. **Push to your fork**:
    ```bash
-   git push origin feature/amazing-feature
+   git push origin feature/issue-123-amazing-feature
    ```
-6. **Open a Pull Request** with a clear description
+6. **Open a Pull Request** with:
+   - Clear description of changes
+   - Reference to the assigned issue (e.g., "Fixes #123")
+   - Screenshots for UI changes
 
 ## AWS Architecture Protection
 
@@ -111,13 +129,29 @@ Git-Done is a minimalist, deadline-driven productivity widget for developers tha
 - **Documentation**: Update relevant documentation with changes
 - **Testing**: Include tests for new features and bug fixes
 
-## Issue Reporting
+## Issue Management
+
+### Reporting Issues
 
 - Use issue templates when available
 - Provide clear reproduction steps for bugs
 - Include environment details (browser, OS, etc.)
 - Search existing issues before creating new ones
 - Label issues appropriately (bug, enhancement, documentation, etc.)
+
+### Working on Issues
+
+- **Assignment Required**: Only work on issues assigned to you
+- **Request Process**: Comment "I'd like to work on this" and wait for assignment
+- **Time Commitment**: If assigned, please provide updates within a week
+- **Stale Assignments**: Issues may be reassigned if no progress is made after a week
+- **Communication**: Keep maintainers updated on your progress
+
+### For Maintainers
+
+- **Fair Assignment**: Assign issues on a first-come, first-served basis
+- **Regular Check-ins**: Follow up on assigned issues that show no activity
+- **Reassignment Policy**: Reassign stale issues after reasonable timeframe
 
 ## Community Standards
 
