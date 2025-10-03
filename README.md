@@ -9,6 +9,7 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
 ## Features
 
 - **GitHub Integration**: OAuth login and webhook-based goal verification
+- **Dual Completion Methods**: Complete goals via commit messages OR issue closure
 - **Minimalist Design**: Dark mode, glassmorphism, clean typography
 - **Real-time Countdowns**: Monospaced timers that create focus
 - **Embeddable Widgets**: Share your accountability publicly
@@ -21,12 +22,18 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
    pip install -r requirements.txt
    ```
 
-2. **Run the application**:
+2. **Set up environment variables**:
+   ```bash
+   cp .env.example .env
+   ```
+   Update .env with your own values (e.g. DATABASE_URL, SECRET_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET).
+
+3. **Run the application**:
    ```bash
    python application.py
    ```
 
-3. **Open locally in your browser**:
+4. **Open locally in your browser**:
    Navigate to `http://localhost:5000`
 
 ## Testing

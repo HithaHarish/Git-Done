@@ -1,3 +1,4 @@
+.venv
 __pycache__/
 *.pyc
 *.pyo
@@ -14,3 +15,17 @@ instance/
 *.db
 *.sqlite
 *.sqlite3
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+instance/*.db
+.env
+.DS_Store
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache/

@@ -11,6 +11,17 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/GD-Logo.png') }}">
     <link rel="shortcut icon" type="image/png" href="{{ url_for('static', filename='images/GD-Logo.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/GD-Logo.png') }}">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- PWA Meta tags -->
+    <meta name="theme-color" content="#6366f1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Git-Done">
+    <meta name="msapplication-TileColor" content="#6366f1">
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -66,6 +77,13 @@
                             </div>
                             <div class="input-group">
                                 <input type="url" id="repo-url" placeholder="https://github.com/username/repository" required>
+                            </div>
+                            <div class="input-group">
+                                <label for="completion-type" class="input-label">Completion Type</label>
+                                <select id="completion-type" required>
+                                    <option value="commit">Commit Message</option>
+                                    <option value="issue">Issue Closed</option>
+                                </select>
                             </div>
                             <div class="input-group">
                                 <input type="text" id="completion-condition" placeholder="Completion tag (e.g., #feature-complete)" required>
