@@ -13,28 +13,20 @@ load_dotenv()
 
 application = Flask(__name__)
 
-#GitHub OAuth configuration
 application.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID')
 application.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET')
-# Database configuration
 application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
-# Validate critical configuration
 if not application.config['SECRET_KEY']:
-    # Generate a temporary secret key for development
     application.config['SECRET_KEY'] = secrets.token_hex(32)
-
-# Session configuration
-application.config['SESSION_TYPE'] = 'filesystem'
 application.config['SESSION_PERMANENT'] = True
 application.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
-application.config['SESSION_USE_SIGNER'] = True
-application.config['SESSION_COOKIE_SECURE'] = False 
 application.config['SESSION_COOKIE_HTTPONLY'] = True
 application.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 application.config['SESSION_COOKIE_NAME'] = 'gitdone_session'
+application.config['SESSION_COOKIE_SECURE'] = os.environ.get('BASE_URL', '').startswith('https')
 
 db = SQLAlchemy(application)
 
@@ -45,7 +37,7 @@ class User(db.Model):
     access_token = db.Column(db.String(200), nullable = False)
     created_at = db.Column(db.DateTime, default = datetime.utcnow, onupdate = datetime.utcnow)
     updated_at = db.Column(db.DateTime, default = datetime.utcnow, onupdate = datetime.utcnow)
-# Goal model
+
 class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_github_id = db.Column(db.String(100), nullable=False)
@@ -61,6 +53,7 @@ class Goal(db.Model):
     repo_owner = db.Column(db.String(100), nullable = True)
     repo_name = db.Column(db.String(100), nullable = True)
     webhook_id = db.Column(db.String(100), nullable = True)
+    
     def to_dict(self):
         base_url = os.environ.get('BASE_URL', 'http://localhost:5000')
         return {
@@ -77,9 +70,8 @@ class Goal(db.Model):
             'embed_token': self.embed_token,
             'embed_url': f'{base_url}/embed/{self.embed_token}' if self.embed_token else None
         }
-    
+
 def create_github_webhook(access_token, owner, repo, webhook_url, secret):
-    """Create a Github webhook for a repo"""
     api_url = f'https://api.github.com/repos/{owner}/{repo}/hooks'
     headers ={
         'Authorization':f'token {access_token}',
@@ -102,25 +94,23 @@ def create_github_webhook(access_token, owner, repo, webhook_url, secret):
     
 @application.route('/')
 def index():
-    if 'username' in session:
-        return render_template('index.html',username = session['username'])
-    return render_template('index.html',username = None)
+    response = make_response(render_template('index.html', username=session.get('username')))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @application.route('/logout')
 def logout():
-    """Clear user session and redirect to home"""
     session.clear()
-    return redirect(url_for('index'))
+    session.modified = True
+    response = make_response(redirect(url_for('index')))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
-@application.route('/api/session-check')
-def session_check():
-    """Temporary endpoint to check session state"""
-    return jsonify({
-        'has_session': bool(session),
-        'username': session.get('username'),
-        'user_github_id': session.get('user_github_id'),
-        'session_keys': list(session.keys())
-    })
+
 
 
 
@@ -133,7 +123,6 @@ def service_worker():
 
 @application.route('/api/github-webhook', methods=['POST'])
 def github_webhook():
-    """Handle and verify GitHub webhook events."""
     signature_header = request.headers.get('X-Hub-Signature-256')
     if not signature_header:
         return jsonify({'error': 'Request is missing signature header'}), 403
@@ -150,7 +139,6 @@ def github_webhook():
     payload = request.get_json()
     event_type = request.headers.get('X-GitHub-Event')
     
-    # Handle push events (commit messages)
     if event_type == 'push':
         repo_full_name = payload.get('repository', {}).get('full_name')
         if not repo_full_name:
@@ -173,9 +161,8 @@ def github_webhook():
                 goal.status = 'completed'
                 goal.completed_at = datetime.utcnow()
                 db.session.commit()
-                break # Stop checking other commits in this push
+                break
     
-    # Handle issues events
     elif event_type == 'issues':
         action = payload.get('action')
         if action == 'closed':
@@ -196,7 +183,6 @@ def github_webhook():
             if not goal:
                 return jsonify({'status': 'No active goal for this repository with issue completion type'}), 200
             
-            # Check if the closed issue number matches the completion condition
             if str(issue_number) == goal.completion_condition or f"#{issue_number}" == goal.completion_condition:
                 goal.status = 'completed'
                 goal.completed_at = datetime.utcnow()
@@ -206,10 +192,8 @@ def github_webhook():
 
 @application.route('/auth/github')
 def github_auth():
-    """Redirect to GitHub for authentication"""
     client_id = application.config['GITHUB_CLIENT_ID']
     
-    # Validate GitHub OAuth configuration
     if not client_id:
         return "Error: GitHub OAuth not configured. Missing GITHUB_CLIENT_ID environment variable.", 500
     
@@ -224,19 +208,15 @@ def github_auth():
 
 @application.route('/auth/callback')
 def github_callback():
-    """Handle GitHub OAuth callback"""
-    # Check for OAuth error
     error = request.args.get('error')
     if error:
         error_description = request.args.get('error_description', 'Unknown error')
         return f"OAuth Error: {error} - {error_description}", 400
     
-    # Getting the authorization code from the query parameters
     code = request.args.get('code')
     if not code:
         return "Error: No authorization code provided", 400
     
-    # Validate GitHub OAuth configuration
     client_id = application.config['GITHUB_CLIENT_ID']
     client_secret = application.config['GITHUB_CLIENT_SECRET']
     
@@ -256,7 +236,6 @@ def github_callback():
         token_response.raise_for_status()
         token_data = token_response.json()
         
-        # Check for OAuth error in response
         if 'error' in token_data:
             return f"GitHub OAuth Error: {token_data.get('error_description', token_data['error'])}", 400
         
@@ -267,7 +246,6 @@ def github_callback():
     except requests.RequestException as e:
         return f"Error communicating with GitHub: {str(e)}", 500
     
-    # Getting User info
     user_url = 'https://api.github.com/user'
     headers = {'Authorization': f'token {access_token}'}
     
@@ -283,7 +261,6 @@ def github_callback():
         return f"Error fetching user data from GitHub: {str(e)}", 500
     
     try:
-        # Finding and creating a user in the database
         user = User.query.filter_by(github_id=str(user_data['id'])).first()
         if not user:
             user = User(
@@ -298,12 +275,11 @@ def github_callback():
         
         db.session.commit()
         
-        # Store the info in session to log them in
-        session.clear()  # Clear any existing session data
+        session.clear()
         session['user_github_id'] = user.github_id
         session['username'] = user.username
-        session.permanent = True  # Make session permanent
-        session.modified = True  # Explicitly mark session as modified
+        session.permanent = True
+        session.modified = True
         
         return redirect(url_for('index'))
         
@@ -313,7 +289,6 @@ def github_callback():
 
 @application.route('/api/goals', methods=['GET'])
 def get_goals():
-    """Get all goals for the currently logged-inuser"""
     if 'user_github_id' not in session:
         return jsonify({'error':'Not authenticated'}),401
     user_id = session['user_github_id']
@@ -322,7 +297,6 @@ def get_goals():
 
 @application.route('/api/goals', methods=['POST'])
 def create_goal():
-    """Create a new goal for the currently logged-in user"""
     if 'user_github_id' not in session:
         return jsonify({'error':'Not authenticated'}),401
     data = request.get_json()
@@ -340,8 +314,6 @@ def create_goal():
     except (ValueError, IndexError):
         return jsonify({'error':'Invalid repository URL. Use format: https://github.com/owner/repo'}),400
     embed_token = secrets.token_urlsafe(16)
-    
-    # Get completion_type from request, default to 'commit' for backward compatibility
     completion_type = data.get('completion_type', 'commit')
     if completion_type not in ['commit', 'issue']:
         return jsonify({'error':'Invalid completion_type. Must be "commit" or "issue"'}),400
@@ -361,7 +333,6 @@ def create_goal():
     db.session.add(goal)
     db.session.commit()
     
-    # Create GitHub webhook
     base_url = os.environ.get('BASE_URL')
     if not base_url:
         return jsonify(goal.to_dict()), 201
@@ -377,7 +348,6 @@ def create_goal():
 
 @application.route('/embed/<token>')
 def embed_widget(token):
-    """Serve embeddable countdown widget"""
     goal = Goal.query.filter_by(embed_token=token).first()
     if not goal:
         return "Widget not found", 404
@@ -387,12 +357,10 @@ def embed_widget(token):
 
 @application.route('/api/embed/<token>/data')
 def embed_data(token):
-    """API endpoint for embedded widget data"""
     goal = Goal.query.filter_by(embed_token=token).first()
     if not goal:
         return jsonify({'error': 'Goal not found'}), 404
     
-    # Calculate time remaining using UTC (universal)
     now_utc = datetime.utcnow()
     
     if goal.status == 'completed':
@@ -417,24 +385,18 @@ def embed_data(token):
     }
     
     response = jsonify(response_data)
-    
-    # CORS headers for cross-origin requests (important for Notion embeds)
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Cache-Control, Pragma'
     response.headers['Access-Control-Max-Age'] = '3600'
     
-    # Cache control headers optimized for CloudFront
     if goal.status == 'completed':
-        # Completed goals can be cached longer
         response.headers['Cache-Control'] = 'public, max-age=3600, s-maxage=3600'
     else:
-        # Active goals should not be cached to ensure real-time updates
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     
-    # Add ETag for better caching
     import hashlib
     etag_data = f"{goal.id}-{goal.status}-{time_remaining}-{goal.completed_at}"
     etag = hashlib.md5(etag_data.encode()).hexdigest()
@@ -442,10 +404,8 @@ def embed_data(token):
     
     return response
 
-# Add OPTIONS handler for CORS preflight requests
 @application.route('/api/embed/<token>/data', methods=['OPTIONS'])
 def embed_data_options(token):
-    """Handle CORS preflight requests"""
     response = make_response()
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
@@ -455,7 +415,6 @@ def embed_data_options(token):
 
 @application.route('/api/health')
 def health_check():
-    """Health check endpoint for monitoring"""
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat(),
