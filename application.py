@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, make_response
 import requests
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import hashlib
 import hmac
@@ -25,6 +25,16 @@ application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 if not application.config['SECRET_KEY']:
     # Generate a temporary secret key for development
     application.config['SECRET_KEY'] = secrets.token_hex(32)
+
+# Session configuration
+application.config['SESSION_TYPE'] = 'filesystem'
+application.config['SESSION_PERMANENT'] = True
+application.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+application.config['SESSION_USE_SIGNER'] = True
+application.config['SESSION_COOKIE_SECURE'] = False 
+application.config['SESSION_COOKIE_HTTPONLY'] = True
+application.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+application.config['SESSION_COOKIE_NAME'] = 'gitdone_session'
 
 db = SQLAlchemy(application)
 
@@ -101,6 +111,16 @@ def logout():
     """Clear user session and redirect to home"""
     session.clear()
     return redirect(url_for('index'))
+
+@application.route('/api/session-check')
+def session_check():
+    """Temporary endpoint to check session state"""
+    return jsonify({
+        'has_session': bool(session),
+        'username': session.get('username'),
+        'user_github_id': session.get('user_github_id'),
+        'session_keys': list(session.keys())
+    })
 
 
 
@@ -279,8 +299,11 @@ def github_callback():
         db.session.commit()
         
         # Store the info in session to log them in
+        session.clear()  # Clear any existing session data
         session['user_github_id'] = user.github_id
         session['username'] = user.username
+        session.permanent = True  # Make session permanent
+        session.modified = True  # Explicitly mark session as modified
         
         return redirect(url_for('index'))
         
