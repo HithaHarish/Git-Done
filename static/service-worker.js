@@ -1,4 +1,4 @@
-const CACHE_NAME = 'git-done-v1';
+const CACHE_NAME = 'git-done-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/css/style.css',
@@ -66,6 +66,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-first strategy for the root page (to handle login/logout properly)
+  const url = new URL(event.request.url);
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          return response;
+        })
+        .catch(() => {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // Cache-first strategy for everything else
   event.respondWith(
     caches.match(event.request)
       .then((cachedResponse) => {
@@ -73,7 +89,6 @@ self.addEventListener('fetch', (event) => {
           console.log('Service Worker: Serving from cache', event.request.url);
           return cachedResponse;
         }
-
 
         console.log('Service Worker: Fetching from network', event.request.url);
         return fetch(event.request)
