@@ -21,6 +21,11 @@ application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
+# Validate critical configuration
+if not application.config['SECRET_KEY']:
+    # Generate a temporary secret key for development
+    application.config['SECRET_KEY'] = secrets.token_hex(32)
+
 db = SQLAlchemy(application)
 
 class User(db.Model):
@@ -48,7 +53,6 @@ class Goal(db.Model):
     webhook_id = db.Column(db.String(100), nullable = True)
     def to_dict(self):
         base_url = os.environ.get('BASE_URL', 'http://localhost:5000')
-        print(f"DEBUG: Using BASE_URL: {base_url}")  # Debug print
         return {
             'id': self.id,
             'user_github_id': self.user_github_id,
@@ -82,10 +86,8 @@ def create_github_webhook(access_token, owner, repo, webhook_url, secret):
     }
     response = requests.post(api_url,json = payload,headers = headers)
     if response.status_code == 201:
-        print("Webhook created successfully")
         return response.json()
     else:
-        print("Failed to create webhook:",response.status_code, response.text)
         return None
     
 @application.route('/')
@@ -96,8 +98,11 @@ def index():
 
 @application.route('/logout')
 def logout():
+    """Clear user session and redirect to home"""
     session.clear()
     return redirect(url_for('index'))
+
+
 
 @application.route('/service-worker.js')
 def service_worker():
@@ -145,7 +150,6 @@ def github_webhook():
         for commit in payload.get('commits', []):
             commit_message = commit.get('message', '')
             if goal.completion_condition in commit_message:
-                print(f"Completion condition '{goal.completion_condition}' found in commit! Goal {goal.id} completed.")
                 goal.status = 'completed'
                 goal.completed_at = datetime.utcnow()
                 db.session.commit()
@@ -174,7 +178,6 @@ def github_webhook():
             
             # Check if the closed issue number matches the completion condition
             if str(issue_number) == goal.completion_condition or f"#{issue_number}" == goal.completion_condition:
-                print(f"Issue #{issue_number} closed! Goal {goal.id} completed.")
                 goal.status = 'completed'
                 goal.completed_at = datetime.utcnow()
                 db.session.commit()
@@ -185,61 +188,105 @@ def github_webhook():
 def github_auth():
     """Redirect to GitHub for authentication"""
     client_id = application.config['GITHUB_CLIENT_ID']
+    
+    # Validate GitHub OAuth configuration
+    if not client_id:
+        return "Error: GitHub OAuth not configured. Missing GITHUB_CLIENT_ID environment variable.", 500
+    
     base_url = os.environ.get('BASE_URL')
-    #print(f"DEBUG: OAuth BASE_URL: {base_url}")
     if base_url:
         redirect_uri = f'{base_url}/auth/callback'
     else:
         redirect_uri = url_for('github_callback', _external=True)
     
-   # print(f"DEBUG: OAuth redirect_uri: {redirect_uri}")
     scope = 'repo'
     return redirect(f'https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}')
 
 @application.route('/auth/callback')
 def github_callback():
     """Handle GitHub OAuth callback"""
-    #Getting the authorization code from the query parameters
+    # Check for OAuth error
+    error = request.args.get('error')
+    if error:
+        error_description = request.args.get('error_description', 'Unknown error')
+        return f"OAuth Error: {error} - {error_description}", 400
+    
+    # Getting the authorization code from the query parameters
     code = request.args.get('code')
     if not code:
-        return "Error: No authorization code provided",400
+        return "Error: No authorization code provided", 400
+    
+    # Validate GitHub OAuth configuration
+    client_id = application.config['GITHUB_CLIENT_ID']
+    client_secret = application.config['GITHUB_CLIENT_SECRET']
+    
+    if not client_id or not client_secret:
+        return "Error: GitHub OAuth not configured properly", 500
+    
     token_url = 'https://github.com/login/oauth/access_token'
     payload = {
-        'client_id': application.config['GITHUB_CLIENT_ID'],
-        'client_secret': application.config['GITHUB_CLIENT_SECRET'],
-        'code':code
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'code': code
     }
-    headers = {'Accept':'application/json'}
-    token_responses = requests.post(token_url, json = payload, headers = headers)
-    token_data = token_responses.json()
-    access_token = token_data.get('access_token')
-    if not access_token:
-        return "Error: No access token received",400
+    headers = {'Accept': 'application/json'}
     
-    #Getting User info
+    try:
+        token_response = requests.post(token_url, json=payload, headers=headers)
+        token_response.raise_for_status()
+        token_data = token_response.json()
+        
+        # Check for OAuth error in response
+        if 'error' in token_data:
+            return f"GitHub OAuth Error: {token_data.get('error_description', token_data['error'])}", 400
+        
+        access_token = token_data.get('access_token')
+        if not access_token:
+            return "Error: No access token received from GitHub", 400
+            
+    except requests.RequestException as e:
+        return f"Error communicating with GitHub: {str(e)}", 500
+    
+    # Getting User info
     user_url = 'https://api.github.com/user'
-    headers = {'Authorization':f'token {access_token}'}
-    user_response = requests.get(user_url,headers = headers)
-    user_data = user_response.json()
+    headers = {'Authorization': f'token {access_token}'}
     
-    #Finding and creating a user in the database
-    user = User.query.filter_by(github_id = str(user_data['id'])).first()
-    if not user:
-        user = User(
-            github_id = str(user_data['id']),
-            username = user_data['login'],
-            access_token = access_token
-        )
-        db.session.add(user)
-    else:
-        user.access_token = access_token
-        user.username = user_data['login']
-    db.session.commit()
+    try:
+        user_response = requests.get(user_url, headers=headers)
+        user_response.raise_for_status()
+        user_data = user_response.json()
+        
+        if 'id' not in user_data or 'login' not in user_data:
+            return "Error: Invalid user data received from GitHub", 400
+            
+    except requests.RequestException as e:
+        return f"Error fetching user data from GitHub: {str(e)}", 500
     
-    #Store the info in session to log them
-    session['user_github_id'] = user.github_id
-    session['username'] = user.username
-    return redirect(url_for('index'))
+    try:
+        # Finding and creating a user in the database
+        user = User.query.filter_by(github_id=str(user_data['id'])).first()
+        if not user:
+            user = User(
+                github_id=str(user_data['id']),
+                username=user_data['login'],
+                access_token=access_token
+            )
+            db.session.add(user)
+        else:
+            user.access_token = access_token
+            user.username = user_data['login']
+        
+        db.session.commit()
+        
+        # Store the info in session to log them in
+        session['user_github_id'] = user.github_id
+        session['username'] = user.username
+        
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        db.session.rollback()
+        return f"Database error: {str(e)}", 500
 
 @application.route('/api/goals', methods=['GET'])
 def get_goals():
@@ -294,8 +341,6 @@ def create_goal():
     # Create GitHub webhook
     base_url = os.environ.get('BASE_URL')
     if not base_url:
-        print("WARNING: BASE_URL not set. Using localhost - webhook will fail in production.")
-        print("For testing, use ngrok: 'ngrok http 5000' and set BASE_URL to the ngrok URL")
         return jsonify(goal.to_dict()), 201
     webhook_url = f'{base_url}/api/github-webhook'
     webhook_secret = application.config['SECRET_KEY']
@@ -305,8 +350,6 @@ def create_goal():
     if webhook_data:
         goal.webhook_id = str(webhook_data.get('id'))
         db.session.commit()
-    else:
-        print(f'Could not create webhook on repo {repo_owner}/{repo_name} for goal {goal.id}')
     return jsonify(goal.to_dict()), 201
 
 @application.route('/embed/<token>')
@@ -399,4 +442,3 @@ def health_check():
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()
-    # application.run(debug=True)
