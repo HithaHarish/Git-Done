@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import secrets
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 
 load_dotenv()
@@ -16,8 +17,18 @@ application = Flask(__name__)
 #GitHub OAuth configuration
 application.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID')
 application.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET')
-# Database configuration
-application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+# Database configuration (fallback to local SQLite if DATABASE_URL is not set)
+db_url = os.environ.get('DATABASE_URL')
+if not db_url:
+    # Ensure the instance folder exists for the SQLite DB file
+    try:
+        os.makedirs(application.instance_path, exist_ok=True)
+    except Exception as e:
+        print(f"WARNING: Could not ensure instance directory exists: {e}")
+    # Use the existing instance/gitdone.db file
+    db_path = os.path.join(application.instance_path, 'gitdone.db')
+    db_url = f"sqlite:///{db_path}"
+application.config['SQLALCHEMY_DATABASE_URI'] = db_url
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 
@@ -87,6 +98,20 @@ def create_github_webhook(access_token, owner, repo, webhook_url, secret):
     else:
         print("Failed to create webhook:",response.status_code, response.text)
         return None
+
+def delete_github_webhook(access_token, owner, repo, webhook_id):
+    """Delete a GitHub webhook for a repo"""
+    api_url = f'https://api.github.com/repos/{owner}/{repo}/hooks/{webhook_id}'
+    headers = {
+        'Authorization': f'token {access_token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    response = requests.delete(api_url, headers=headers)
+    # 204 No Content on success; 404 if missing (treat as already deleted)
+    if response.status_code in (204, 404):
+        return True
+    print("Failed to delete webhook:", response.status_code, response.text)
+    return False
     
 @application.route('/')
 def index():
@@ -302,6 +327,33 @@ def create_goal():
         print(f'Could not create webhook on repo {repo_owner}/{repo_name} for goal {goal.id}')
     return jsonify(goal.to_dict()), 201
 
+@application.route('/api/goals/<int:goal_id>', methods=['DELETE'])
+def delete_goal(goal_id):
+    """Delete a goal for the current user; remove GitHub webhook if present"""
+    if 'user_github_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    user_github_id = session['user_github_id']
+
+    goal = Goal.query.filter_by(id=goal_id, user_github_id=user_github_id).first()
+    if not goal:
+        return jsonify({'error': 'Goal not found'}), 404
+
+    # Attempt to delete GitHub webhook if we have the information
+    if goal.webhook_id and goal.repo_owner and goal.repo_name:
+        user = User.query.filter_by(github_id=user_github_id).first()
+        if user and user.access_token:
+            try:
+                delete_github_webhook(user.access_token, goal.repo_owner, goal.repo_name, goal.webhook_id)
+            except Exception as e:
+                # Log and continue; we still delete the local goal to avoid dangling state
+                print(f"Error deleting GitHub webhook {goal.webhook_id} for {goal.repo_owner}/{goal.repo_name}: {e}")
+
+    # Delete the goal from the database
+    db.session.delete(goal)
+    db.session.commit()
+
+    return jsonify({'status': 'deleted'}), 200
+
 @application.route('/embed/<token>')
 def embed_widget(token):
     """Serve embeddable countdown widget"""
@@ -392,4 +444,22 @@ def health_check():
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()
-    # application.run(debug=True)
+        # Lightweight SQLite migrations for local dev: add columns if missing
+        try:
+            db_uri = application.config.get('SQLALCHEMY_DATABASE_URI', '')
+            if db_uri.startswith('sqlite'):
+                with db.engine.connect() as conn:
+                    cols = [row[1] for row in conn.execute(text("PRAGMA table_info(goal)")).fetchall()]
+                    if 'completion_type' not in cols:
+                        conn.execute(text("ALTER TABLE goal ADD COLUMN completion_type VARCHAR(20) DEFAULT 'commit'"))
+                    if 'repo_owner' not in cols:
+                        conn.execute(text("ALTER TABLE goal ADD COLUMN repo_owner VARCHAR(100)"))
+                    if 'repo_name' not in cols:
+                        conn.execute(text("ALTER TABLE goal ADD COLUMN repo_name VARCHAR(100)"))
+                    if 'webhook_id' not in cols:
+                        conn.execute(text("ALTER TABLE goal ADD COLUMN webhook_id VARCHAR(100)"))
+                    if 'embed_token' not in cols:
+                        conn.execute(text("ALTER TABLE goal ADD COLUMN embed_token VARCHAR(200)"))
+        except Exception as e:
+            print(f"WARNING: SQLite migration check failed: {e}")
+    application.run(debug=True)
