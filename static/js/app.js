@@ -205,6 +205,17 @@ class GitDoneApp {
             </div>
         `;
 
+        // New Addition ICS Download Button
+        const icsButton = document.createElement('button');
+        icsButton.textContent = '📅 Download .ics';
+        icsButton.className = 'btn-secondary';
+        icsButton.style.marginTop = '0.5rem';
+        icsButton.addEventListener('click', () => {
+            // Download directly from backend
+            window.location.href = `/api/goals/${goal.id}/calendar`;
+        });
+        widget.querySelector('.embed-info').appendChild(icsButton);
+
         // Add copy functionality to embed URL input
         const embedInput = widget.querySelector('input[readonly]');
         embedInput.addEventListener('click', function () {
