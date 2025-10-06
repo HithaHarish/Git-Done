@@ -62,6 +62,7 @@ class GitDoneApp {
     
             if (response.ok) {
                 const newGoal = await response.json();
+                console.log('New goal created:', newGoal);
                 await this.loadGoals();
                 form.reset();
 
@@ -129,9 +130,7 @@ class GitDoneApp {
             const response = await fetch('/api/goals');
             if (response.ok) {
                 const goalsData = await response.json();
-                console.log('📥 LOAD GOALS - Received goals:', goalsData.length);
                 this.goals = goalsData;
-                
                 console.log('Loaded goals:', this.goals);
                 this.renderGoals();
             } else {
