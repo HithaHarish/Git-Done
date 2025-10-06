@@ -243,33 +243,6 @@ class GitDoneApp {
         return widget;
     }
 
-    // New ICS Generation Method
-    generateICS(goal) {
-    const dtStart = new Date(goal.deadline).toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
-    const dtEnd = new Date(new Date(goal.deadline).getTime() + 3600000) // 1 hour event
-                    .toISOString().replace(/[-:]/g,'').split('.')[0] + 'Z';
-    const icsContent = `
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Git-Done//Goal Calendar//EN
-BEGIN:VEVENT
-UID:${goal.id}@gitdone.app
-DTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z
-DTSTART:${dtStart}
-DTEND:${dtEnd}
-SUMMARY:${goal.description}
-DESCRIPTION:Track your goal on Git-Done. Completion tag: ${goal.completion_condition}
-URL:${goal.repo_url}
-END:VEVENT
-END:VCALENDAR
-`.trim();
-
-    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    return url;
-}
-
-
     startCountdown(goal) {
         const countdownElement = document.getElementById(`countdown-${goal.id}`);
         if (!countdownElement) {
