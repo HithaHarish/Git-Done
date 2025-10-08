@@ -293,7 +293,8 @@ def get_goals():
     if 'user_github_id' not in session:
         return jsonify({'error':'Not authenticated'}),401
     user_id = session['user_github_id']
-    goals = Goal.query.filter_by(user_github_id = user_id).order_by(Goal.created_at.desc()).all()
+    #goals = Goal.query.filter_by(user_github_id = user_id).order_by(Goal.created_at.desc()).all()
+    goals = Goal.query.filter_by(user_github_id = user_id).order_by(Goal.deadline.asc()).all()
     return jsonify([goal.to_dict() for goal in goals])
 
 @application.route('/api/goals', methods=['POST'])

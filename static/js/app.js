@@ -35,13 +35,13 @@ class GitDoneApp {
     async createGoal() {
         const form = document.getElementById('goal-form');
         const submitButton = form.querySelector('button[type="submit"]');
-
+    
         // Add loading state
         const originalText = submitButton.textContent;
         submitButton.textContent = '🚀 Creating...';
         submitButton.disabled = true;
         submitButton.classList.add('loading');
-
+        
         // The backend knows the user, so we don't need to send user_github_id
         const goalData = {
             description: document.getElementById('description').value,
@@ -50,7 +50,7 @@ class GitDoneApp {
             completion_condition: document.getElementById('completion-condition').value,
             completion_type: document.getElementById('completion-type').value
         };
-
+    
         try {
             const response = await fetch('/api/goals', {
                 method: 'POST',
@@ -59,12 +59,11 @@ class GitDoneApp {
                 },
                 body: JSON.stringify(goalData)
             });
-
+    
             if (response.ok) {
                 const newGoal = await response.json();
                 console.log('New goal created:', newGoal);
-                this.goals.unshift(newGoal); // Add to beginning for newest first
-                this.renderGoals();
+                await this.loadGoals();
                 form.reset();
 
                 // Show success feedback
@@ -128,10 +127,10 @@ class GitDoneApp {
 
     async loadGoals() {
         try {
-            // This will now only fetch goals for the logged-in user
             const response = await fetch('/api/goals');
             if (response.ok) {
-                this.goals = await response.json();
+                const goalsData = await response.json();
+                this.goals = goalsData;
                 console.log('Loaded goals:', this.goals);
                 this.renderGoals();
             } else {
@@ -145,7 +144,7 @@ class GitDoneApp {
     renderGoals() {
         const container = document.getElementById('goals-container');
         container.innerHTML = ''; // Clear existing goals
-
+        
         if (this.goals.length === 0) {
             container.innerHTML = `
                 <div class="card fade-in-up" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
@@ -155,7 +154,7 @@ class GitDoneApp {
             `;
             return;
         }
-
+    
         this.goals.forEach((goal, index) => {
             const goalElement = this.createGoalWidget(goal);
             // Stagger animations
