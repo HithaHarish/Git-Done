@@ -1,4 +1,4 @@
-# Git-Done
+# GitDone
 
 A minimalist, deadline-driven productivity widget for developers. Connect your GitHub activity to accountability timers that only stop when you ship.
 
@@ -17,71 +17,43 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
 
 ## Quick Start
 
-1. **Install dependencies**:
+1. Install dependencies and set up environment:
    ```bash
    pip install -r requirements.txt
-   ```
-
-2. **Set up environment variables**:
-   ```bash
    cp .env.example .env
    ```
-   Update .env with your own values (e.g. DATABASE_URL, SECRET_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET).
 
-3. **Run the application**:
+2. Update `.env` with your values (DATABASE_URL, SECRET_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET)
+
+3. Run the application:
    ```bash
    python application.py
    ```
 
-4. **Open locally in your browser**:
-   Navigate to `http://localhost:5000`
+4. Open `http://localhost:5000` in your browser
 
 ## Testing
 
-The project includes automated tests using pytest to ensure code quality and prevent regressions.
+Run tests with pytest:
+```bash
+pytest                                      # Run all tests
+pytest --cov=application --cov-report=html  # With coverage report
+```
 
-### Running Tests
-
-1. **Install test dependencies** (included in requirements.txt):
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Run the test suite**:
-   ```bash
-   pytest
-   ```
-
-3. **Run tests with coverage**:
-   ```bash
-   pytest --cov=application --cov-report=html
-   ```
-
-### Test Structure
-
-- `tests/test_api.py`: API endpoint tests (health check, etc.)
-- `tests/test_models.py`: Model unit tests (Goal.to_dict(), etc.)
-- `tests/conftest.py`: Shared fixtures for Flask app and database setup
-
-Tests use an in-memory SQLite database for isolation and speed.
-
-## Usage
-
-1. **Login with GitHub** - Authenticate via OAuth2
-2. **Create a Goal** - Set description, deadline, repo, and completion condition
-3. **Start Coding** - The countdown begins immediately
-4. **Ship Your Code** - Push commits, close issues, or merge PRs
-5. **Goal Complete** - Timer stops, success message appears
+Test files:
+- `tests/test_api.py` - API endpoint tests
+- `tests/test_models.py` - Model unit tests
+- `tests/conftest.py` - Shared fixtures
 
 ## Example Goals
 
-- "Implement user authentication" - Complete when commit contains `#auth-complete`
-- "Fix critical bug" - Complete when issue #42 is closed
-- "Ship new feature" - Complete when PR to main branch is merged
+- "Implement user authentication" → Complete when commit contains `#auth-complete`
+- "Fix critical bug" → Complete when issue #42 is closed
+- "Ship new feature" → Complete when PR to main branch is merged
 
 ## Tech Stack
 
-- **Backend**: Python Flask + SQLAlchemy + AWS RDS PostgreSQL
+- **Backend**: Flask + SQLAlchemy + PostgreSQL (AWS RDS)
 - **Frontend**: Vanilla HTML/CSS/JavaScript
 - **Integration**: GitHub API + Webhooks
 - **Deployment**: AWS Elastic Beanstalk + CloudFront
@@ -94,6 +66,7 @@ The project uses Kiro for development assistance:
 - **Hooks**: Automated workflows in `.kiro/hooks/`
 - **Steering**: Project guidelines in `.kiro/steering/`
 
+_Note: If a directory is absent then that feature wasn't used for production._
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on:
@@ -108,6 +81,6 @@ Whether you're fixing bugs, adding features, or improving documentation, your co
 
 ## License
 
-MIT License - Build something awesome.
+MIT License
 
 
