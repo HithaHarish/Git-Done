@@ -444,8 +444,8 @@ def health_check():
     except Exception as e:
         health_status['checks']['database'] = f'unhealthy: {str(e)}'
         health_status['status'] = 'degraded'
-    
-    # Check GitHub API availability (optional, lightweight check)
+
+    # Check GitHub API availability
     try:
         github_response = requests.get('https://api.github.com/zen', timeout=2)
         if github_response.status_code == 200:
@@ -489,7 +489,30 @@ def download_goal_ics(goal_id):
     return response
 
 
-if __name__ == '__main__':
+def init_database():
+    """Initialize database and add missing columns"""
     with application.app_context():
-        db.create_all()
-        #application.run(debug=True)
+        try:
+            from sqlalchemy import text
+            result = db.session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='goal' AND column_name='completion_type'
+            """))
+            if not result.fetchone():
+                print("Adding missing 'completion_type' column...")
+                db.session.execute(text("""
+                    ALTER TABLE goal 
+                    ADD COLUMN completion_type VARCHAR(20) NOT NULL DEFAULT 'commit'
+                """))
+                db.session.commit()
+                print("Database schema updated!")
+            
+        except Exception as e:
+            print(f"Note: {str(e)}")
+            db.create_all()
+            print("Database tables created!")
+
+if __name__ == '__main__':
+    init_database()
+    #application.run(debug=True)
