@@ -429,6 +429,35 @@ def embed_data_options(token):
     response.headers['Access-Control-Max-Age'] = '3600'
     return response
 
+@application.route('/api/migrate-db')
+def migrate_db():
+    """One-time migration endpoint - DELETE AFTER USE"""
+    try:
+        from sqlalchemy import text
+        
+        # Check if column exists
+        result = db.session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='goal' AND column_name='completion_type'
+        """))
+        
+        if result.fetchone():
+            return jsonify({'status': 'already_migrated', 'message': 'Column already exists'}), 200
+        
+        # Add the column
+        db.session.execute(text("""
+            ALTER TABLE goal 
+            ADD COLUMN completion_type VARCHAR(20) NOT NULL DEFAULT 'commit'
+        """))
+        db.session.commit()
+        
+        return jsonify({'status': 'success', 'message': 'Migration completed successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @application.route('/api/health')
 def health_check():
     health_status = {
