@@ -32,6 +32,29 @@ class GitDoneApp {
         }
     }
 
+    parseDeadlineToISO(deadlineStr) {
+        // Parse DD/MM/YYYY HH:MM format
+        const regex = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/;
+        const match = deadlineStr.match(regex);
+        
+        if (!match) {
+            return null;
+        }
+        
+        const [, day, month, year, hours, minutes] = match;
+        
+        // Create date object (month is 0-indexed in JavaScript)
+        const date = new Date(year, month - 1, day, hours, minutes);
+        
+        // Validate the date
+        if (isNaN(date.getTime())) {
+            return null;
+        }
+        
+        // Return ISO string
+        return date.toISOString();
+    }
+
     async createGoal() {
         const form = document.getElementById('goal-form');
         const submitButton = form.querySelector('button[type="submit"]');
@@ -42,24 +65,41 @@ class GitDoneApp {
         submitButton.disabled = true;
         submitButton.classList.add('loading');
         
+        // Parse DD/MM/YYYY HH:MM format to ISO
+        const deadlineInput = document.getElementById('deadline').value;
+        const deadlineISO = this.parseDeadlineToISO(deadlineInput);
+        
+        if (!deadlineISO) {
+            this.showNotification('❌ Invalid deadline format. Use DD/MM/YYYY HH:MM', 'error');
+            submitButton.textContent = originalText;
+            submitButton.disabled = false;
+            submitButton.classList.remove('loading');
+            return;
+        }
+        
         // The backend knows the user, so we don't need to send user_github_id
         const goalData = {
             description: document.getElementById('description').value,
-            deadline: document.getElementById('deadline').value,
+            deadline: deadlineISO,
             repo_url: document.getElementById('repo-url').value,
             completion_condition: document.getElementById('completion-condition').value,
             completion_type: document.getElementById('completion-type').value
         };
     
         try {
+            console.log('Creating goal with data:', goalData);
+            
             const response = await fetch('/api/goals', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(goalData)
+                body: JSON.stringify(goalData),
+                credentials: 'same-origin' // Ensure cookies are sent
             });
     
+            console.log('Response status:', response.status);
+            
             if (response.ok) {
                 const newGoal = await response.json();
                 console.log('New goal created:', newGoal);
@@ -69,13 +109,25 @@ class GitDoneApp {
                 // Show success feedback
                 this.showNotification('🎉 Goal created successfully!', 'success');
             } else {
-                const errorData = await response.json();
-                console.error('Failed to create goal:', errorData);
-                this.showNotification(`❌ Failed to create goal: ${errorData.error}`, 'error');
+                let errorMessage = 'Unknown error';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorMessage;
+                    console.error('Failed to create goal:', errorData);
+                } catch (e) {
+                    errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    console.error('Failed to parse error response:', e);
+                }
+                this.showNotification(`❌ Failed: ${errorMessage}`, 'error');
             }
         } catch (error) {
             console.error('Error creating goal:', error);
-            this.showNotification('❌ Network error. Please try again.', 'error');
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
+            this.showNotification(`❌ Network error: ${error.message}`, 'error');
         } finally {
             // Reset button state
             submitButton.textContent = originalText;
@@ -302,7 +354,13 @@ class GitDoneApp {
             } else if (timeRemaining < 604800) { // Less than 1 week
                 document.getElementById(`status-${goal.id}`).textContent = `📅 ${days} day${days > 1 ? 's' : ''} remaining`;
             } else {
-                document.getElementById(`status-${goal.id}`).textContent = `🎯 Deadline: ${deadline.toLocaleDateString()}`;
+                // Format as DD/MM/YYYY
+                const day = deadline.getDate().toString().padStart(2, '0');
+                const month = (deadline.getMonth() + 1).toString().padStart(2, '0');
+                const year = deadline.getFullYear();
+                const hours = deadline.getHours().toString().padStart(2, '0');
+                const minutes = deadline.getMinutes().toString().padStart(2, '0');
+                document.getElementById(`status-${goal.id}`).textContent = `🎯 Deadline: ${day}/${month}/${year} ${hours}:${minutes}`;
             }
         };
 
