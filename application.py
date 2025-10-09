@@ -486,8 +486,8 @@ def health_check():
     except Exception as e:
         health_status['checks']['database'] = f'unhealthy: {str(e)}'
         health_status['status'] = 'degraded'
-    
-    # Check GitHub API availability (optional, lightweight check)
+
+    # Check GitHub API availability
     try:
         github_response = requests.get('https://api.github.com/zen', timeout=2)
         if github_response.status_code == 200:
