@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import secrets
 from dotenv import load_dotenv
+from sqlalchemy import text
 from flask import Response
 
 
@@ -92,6 +93,20 @@ def create_github_webhook(access_token, owner, repo, webhook_url, secret):
         return response.json()
     else:
         return None
+
+def delete_github_webhook(access_token, owner, repo, webhook_id):
+    """Delete a GitHub webhook for a repo"""
+    api_url = f'https://api.github.com/repos/{owner}/{repo}/hooks/{webhook_id}'
+    headers = {
+        'Authorization': f'token {access_token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    response = requests.delete(api_url, headers=headers)
+    # 204 No Content on success; 404 if missing (treat as already deleted)
+    if response.status_code in (204, 404):
+        return True
+    print("Failed to delete webhook:", response.status_code, response.text)
+    return False
     
 @application.route('/')
 def index():
@@ -362,6 +377,33 @@ def create_goal():
     
     return jsonify(goal.to_dict()), 201
 
+@application.route('/api/goals/<int:goal_id>', methods=['DELETE'])
+def delete_goal(goal_id):
+    """Delete a goal for the current user; remove GitHub webhook if present"""
+    if 'user_github_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    user_github_id = session['user_github_id']
+
+    goal = Goal.query.filter_by(id=goal_id, user_github_id=user_github_id).first()
+    if not goal:
+        return jsonify({'error': 'Goal not found'}), 404
+
+    # Attempt to delete GitHub webhook if we have the information
+    if goal.webhook_id and goal.repo_owner and goal.repo_name:
+        user = User.query.filter_by(github_id=user_github_id).first()
+        if user and user.access_token:
+            try:
+                delete_github_webhook(user.access_token, goal.repo_owner, goal.repo_name, goal.webhook_id)
+            except Exception as e:
+                # Log and continue; we still delete the local goal to avoid dangling state
+                print(f"Error deleting GitHub webhook {goal.webhook_id} for {goal.repo_owner}/{goal.repo_name}: {e}")
+
+    # Delete the goal from the database
+    db.session.delete(goal)
+    db.session.commit()
+
+    return jsonify({'status': 'deleted'}), 200
+
 @application.route('/embed/<token>')
 def embed_widget(token):
     goal = Goal.query.filter_by(embed_token=token).first()
@@ -492,4 +534,4 @@ def download_goal_ics(goal_id):
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()
-    #application.run(debug=True)
+    application.run(debug=False)

@@ -249,6 +249,9 @@ class GitDoneApp {
             </p>
             <div class="countdown ${goal.status === 'completed' ? 'completed' : ''}" id="countdown-${goal.id}">--:--:--</div>
             <div class="goal-status ${statusClass}" id="status-${goal.id}">${statusText}</div>
+            <div class="goal-actions" style="margin-top: 1rem; display: flex; gap: .5rem;">
+                <button class="btn-secondary" data-action="delete" data-goal-id="${goal.id}" aria-label="Delete goal">🗑️ Delete</button>
+            </div>
             <div class="embed-info">
                 <p><strong>🔗 Embed URL:</strong></p>
                 <input type="text" value="${embedUrl}" readonly onclick="this.select(); this.copyToClipboard()">
@@ -283,6 +286,15 @@ class GitDoneApp {
                 }, 2000);
             });
         });
+
+        // Bind action buttons
+        const deleteBtn = widget.querySelector('button[data-action="delete"][data-goal-id="' + goal.id + '"]');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', async () => {
+                if (!confirm('Delete this goal? This action cannot be undone.')) return;
+                await this.deleteGoal(goal.id);
+            });
+        }
 
         // Start countdown after the widget is added to DOM
         if (goal.status === 'active') {
@@ -360,6 +372,24 @@ class GitDoneApp {
         updateCountdown();
         const interval = setInterval(updateCountdown, 1000);
         this.countdownIntervals.set(goal.id, interval);
+    }
+
+    async deleteGoal(goalId) {
+        try {
+            const response = await fetch(`/api/goals/${goalId}`, { method: 'DELETE' });
+            if (response.ok) {
+                this.goals = this.goals.filter(g => g.id !== goalId);
+                this.renderGoals();
+                this.showNotification('🗑️ Goal deleted.', 'success');
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                const message = errorData.error || 'Failed to delete goal.';
+                this.showNotification(`❌ ${message}`, 'error');
+            }
+        } catch (err) {
+            console.error('Error deleting goal:', err);
+            this.showNotification('❌ Network error. Please try again.', 'error');
+        }
     }
 }
 
