@@ -22,13 +22,48 @@ Set a coding goal, set a deadline, and watch the countdown tick. The timer only 
    pip install -r requirements.txt
    ```
 
-2. **Run the application**:
+2. **Set up environment variables**:
+   ```bash
+   cp .env.example .env
+   ```
+   Update .env with your own values (e.g. DATABASE_URL, SECRET_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET).
+
+3. **Run the application**:
    ```bash
    python application.py
    ```
 
-3. **Open locally in your browser**:
+4. **Open locally in your browser**:
    Navigate to `http://localhost:5000`
+
+## Testing
+
+The project includes automated tests using pytest to ensure code quality and prevent regressions.
+
+### Running Tests
+
+1. **Install test dependencies** (included in requirements.txt):
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run the test suite**:
+   ```bash
+   pytest
+   ```
+
+3. **Run tests with coverage**:
+   ```bash
+   pytest --cov=application --cov-report=html
+   ```
+
+### Test Structure
+
+- `tests/test_api.py`: API endpoint tests (health check, etc.)
+- `tests/test_models.py`: Model unit tests (Goal.to_dict(), etc.)
+- `tests/conftest.py`: Shared fixtures for Flask app and database setup
+
+Tests use an in-memory SQLite database for isolation and speed.
 
 ## Usage
 

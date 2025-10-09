@@ -4,3 +4,6 @@ requests
 python-dotenv
 gunicorn
 psycopg2-binary
+pytest>=7.4.0
+pytest-flask
+pytest-cov
