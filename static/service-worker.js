@@ -68,6 +68,12 @@ self.addEventListener('fetch', (event) => {
 
   // Network-first strategy for the root page (to handle login/logout properly)
   const url = new URL(event.request.url);
+
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
   if (url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
       fetch(event.request)

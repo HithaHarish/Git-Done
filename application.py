@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import secrets
 from dotenv import load_dotenv
+from sqlalchemy import text
 from flask import Response
 
 
@@ -92,6 +93,20 @@ def create_github_webhook(access_token, owner, repo, webhook_url, secret):
         return response.json()
     else:
         return None
+
+def delete_github_webhook(access_token, owner, repo, webhook_id):
+    """Delete a GitHub webhook for a repo"""
+    api_url = f'https://api.github.com/repos/{owner}/{repo}/hooks/{webhook_id}'
+    headers = {
+        'Authorization': f'token {access_token}',
+        'Accept': 'application/vnd.github.v3+json'
+    }
+    response = requests.delete(api_url, headers=headers)
+    # 204 No Content on success; 404 if missing (treat as already deleted)
+    if response.status_code in (204, 404):
+        return True
+    print("Failed to delete webhook:", response.status_code, response.text)
+    return False
     
 @application.route('/')
 def index():
@@ -293,14 +308,22 @@ def get_goals():
     if 'user_github_id' not in session:
         return jsonify({'error':'Not authenticated'}),401
     user_id = session['user_github_id']
-    goals = Goal.query.filter_by(user_github_id = user_id).order_by(Goal.created_at.desc()).all()
+    #goals = Goal.query.filter_by(user_github_id = user_id).order_by(Goal.created_at.desc()).all()
+    goals = Goal.query.filter_by(user_github_id = user_id).order_by(Goal.deadline.asc()).all()
     return jsonify([goal.to_dict() for goal in goals])
 
 @application.route('/api/goals', methods=['POST'])
 def create_goal():
     if 'user_github_id' not in session:
         return jsonify({'error':'Not authenticated'}),401
-    data = request.get_json()
+    try:
+        data = request.get_json()
+    except Exception as e:
+        return jsonify({'error': f'Invalid JSON data: {str(e)}'}), 400
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
     if not all(k in data for k in ('description','deadline','repo_url','completion_condition')):
         return jsonify({'error':'Missing required fields'}),400
     user_id = session['user_github_id']
@@ -319,33 +342,67 @@ def create_goal():
     if completion_type not in ['commit', 'issue']:
         return jsonify({'error':'Invalid completion_type. Must be "commit" or "issue"'}),400
     
-    goal = Goal(
-        user_github_id=user_id,
-        description=data.get('description'),
-        deadline=datetime.fromisoformat(data.get('deadline').replace('Z', '')),
-        repo_url=data.get('repo_url'),
-        completion_condition=data.get('completion_condition'),
-        completion_type=completion_type,
-        repo_owner=repo_owner,
-        repo_name=repo_name,
-        embed_token=embed_token
-    )
-    
-    db.session.add(goal)
-    db.session.commit()
+    try:
+        goal = Goal(
+            user_github_id=user_id,
+            description=data.get('description'),
+            deadline=datetime.fromisoformat(data.get('deadline').replace('Z', '')),
+            repo_url=data.get('repo_url'),
+            completion_condition=data.get('completion_condition'),
+            completion_type=completion_type,
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            embed_token=embed_token
+        )
+        db.session.add(goal)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
     
     base_url = os.environ.get('BASE_URL')
     if not base_url:
         return jsonify(goal.to_dict()), 201
-    webhook_url = f'{base_url}/api/github-webhook'
-    webhook_secret = application.config['SECRET_KEY']
-    webhook_data = create_github_webhook(
-        user.access_token,repo_owner, repo_name, webhook_url, webhook_secret
-    )
-    if webhook_data:
-        goal.webhook_id = str(webhook_data.get('id'))
-        db.session.commit()
+    try:
+        webhook_url = f'{base_url}/api/github-webhook'
+        webhook_secret = application.config['SECRET_KEY']
+        webhook_data = create_github_webhook(
+            user.access_token,repo_owner, repo_name, webhook_url, webhook_secret
+        )
+        if webhook_data:
+            goal.webhook_id = str(webhook_data.get('id'))
+            db.session.commit()
+    except Exception as e:
+        print(f"Warning: Failed to create webhook: {str(e)}")
+    
     return jsonify(goal.to_dict()), 201
+
+@application.route('/api/goals/<int:goal_id>', methods=['DELETE'])
+def delete_goal(goal_id):
+    """Delete a goal for the current user; remove GitHub webhook if present"""
+    if 'user_github_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    user_github_id = session['user_github_id']
+
+    goal = Goal.query.filter_by(id=goal_id, user_github_id=user_github_id).first()
+    if not goal:
+        return jsonify({'error': 'Goal not found'}), 404
+
+    # Attempt to delete GitHub webhook if we have the information
+    if goal.webhook_id and goal.repo_owner and goal.repo_name:
+        user = User.query.filter_by(github_id=user_github_id).first()
+        if user and user.access_token:
+            try:
+                delete_github_webhook(user.access_token, goal.repo_owner, goal.repo_name, goal.webhook_id)
+            except Exception as e:
+                # Log and continue; we still delete the local goal to avoid dangling state
+                print(f"Error deleting GitHub webhook {goal.webhook_id} for {goal.repo_owner}/{goal.repo_name}: {e}")
+
+    # Delete the goal from the database
+    db.session.delete(goal)
+    db.session.commit()
+
+    return jsonify({'status': 'deleted'}), 200
 
 @application.route('/embed/<token>')
 def embed_widget(token):
@@ -422,11 +479,35 @@ def embed_data_options(token):
 
 @application.route('/api/health')
 def health_check():
-    return jsonify({
-        'status': 'healthy',
+    health_status = {
+        'service': 'git-done-api',
         'timestamp': datetime.utcnow().isoformat(),
-        'service': 'git-done-api'
-    })
+        'status': 'healthy',
+        'checks': {}
+    }
+    # Check database connection
+    try:
+        db.session.execute('SELECT 1')
+        health_status['checks']['database'] = 'healthy'
+    except Exception as e:
+        health_status['checks']['database'] = f'unhealthy: {str(e)}'
+        health_status['status'] = 'degraded'
+
+    # Check GitHub API availability
+    try:
+        github_response = requests.get('https://api.github.com/zen', timeout=2)
+        if github_response.status_code == 200:
+            health_status['checks']['github_api'] = 'healthy'
+        else:
+            health_status['checks']['github_api'] = f'degraded: status {github_response.status_code}'
+            health_status['status'] = 'degraded'
+    except Exception as e:
+        health_status['checks']['github_api'] = f'unhealthy: {str(e)}'
+        health_status['status'] = 'degraded'
+    
+    # Return appropriate status code
+    status_code = 200 if health_status['status'] == 'healthy' else 503
+    return jsonify(health_status), status_code
 
 # New route to download goal as .ics file
 @application.route('/api/goals/<int:goal_id>/calendar')
@@ -439,16 +520,17 @@ def download_goal_ics(goal_id):
         return jsonify({'error':'Goal not found'}), 404
 
     ics_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Git-Done//Deadline Event//EN
-BEGIN:VEVENT
-UID:{goal.id}@git-done.app
-DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}
-DTSTART:{goal.deadline.strftime('%Y%m%dT%H%M%SZ')}
-SUMMARY:{goal.description}
-DESCRIPTION:GitHub Repo: {goal.repo_url} | Completion Tag: {goal.completion_condition}
-END:VEVENT
-END:VCALENDAR"""
+                      VERSION:2.0
+                      PRODID:-//Git-Done//Deadline Event//EN
+                      BEGIN:VEVENT
+                      UID:{goal.id}@git-done.app
+                      DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}
+                      DTSTART:{goal.deadline.strftime('%Y%m%dT%H%M%SZ')}
+                      SUMMARY:{goal.description}
+                      DESCRIPTION:GitHub Repo: {goal.repo_url} | Completion Tag: {goal.completion_condition}
+                      END:VEVENT
+                      END:VCALENDAR
+                    """
 
     response = Response(ics_content, mimetype='text/calendar')
     response.headers['Content-Disposition'] = f'attachment; filename=goal_{goal.id}.ics'
@@ -458,4 +540,4 @@ END:VCALENDAR"""
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()
-        application.run(debug=True)
+    application.run(debug=False)

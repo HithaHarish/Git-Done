@@ -15,7 +15,7 @@ Git-Done is a minimalist, deadline-driven productivity widget for developers tha
 - **No Stress Language**: Motivating without being anxiety-inducing.
 
 ## Technical Standards
-- **Backend**: Python Flask with SQLite for simplicity
+- **Backend**: Python Flask with PostgreSQL (AWS RDS)
 - **Frontend**: Vanilla HTML/CSS/JS - no heavy frameworks
 - **Progressive Web App**: Must be installable on mobile
 - **GitHub Integration**: OAuth2 authentication and webhook handling

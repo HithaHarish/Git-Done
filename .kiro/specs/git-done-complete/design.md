@@ -11,7 +11,7 @@ Git-Done is a Flask-based web application that provides deadline-driven producti
 ```mermaid
 graph TB
     A[User Browser] --> B[Flask Web App]
-    B --> C[SQLite Database]
+    B --> C[PostgreSQL Database - AWS RDS]
     B --> D[GitHub API]
     E[GitHub Webhooks] --> B
     F[Notion/External] --> G[Embedded Widget Endpoint]
@@ -240,7 +240,7 @@ class User(db.Model):
 ### Production Environment
 - **Web Server**: Gunicorn with multiple workers
 - **Reverse Proxy**: Nginx for static file serving and SSL termination
-- **Database**: SQLite with regular backups (or PostgreSQL for scale)
+- **Database**: PostgreSQL on AWS RDS with automated backups
 - **Environment Variables**: Secure storage of GitHub OAuth credentials
 
 ### Security Configuration
