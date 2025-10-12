@@ -45,6 +45,7 @@ class Goal(db.Model):
     user_github_id = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(200), nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
+    deadline_display = db.Column(db.String(25), nullable=True)
     repo_url = db.Column(db.String(500), nullable=False)
     completion_condition = db.Column(db.String(200), nullable=False)
     completion_type = db.Column(db.String(20), default='commit', nullable=False)  # 'commit' or 'issue'
@@ -58,17 +59,21 @@ class Goal(db.Model):
     
     def to_dict(self):
         base_url = os.environ.get('BASE_URL', 'http://localhost:5000')
+        # Serialize datetimes as UTC ISO strings with trailing Z to avoid timezone shifts in the frontend
+        # Prefer the stored user-facing display string (if provided) to avoid timezone conversion issues
+        display_deadline = self.deadline_display if getattr(self, 'deadline_display', None) else (self.deadline.strftime('%d/%m/%Y %H:%M') if self.deadline else None)
         return {
             'id': self.id,
             'user_github_id': self.user_github_id,
             'description': self.description,
-            'deadline': self.deadline.isoformat(),
+            'deadline': self.deadline.isoformat() + 'Z',
+            'deadline_display': display_deadline,
             'repo_url': self.repo_url,
             'completion_condition': self.completion_condition,
             'completion_type': self.completion_type,
             'status': self.status,
-            'created_at': self.created_at.isoformat(),
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() + 'Z',
+            'completed_at': (self.completed_at.isoformat() + 'Z') if self.completed_at else None,
             'embed_token': self.embed_token,
             'embed_url': f'{base_url}/embed/{self.embed_token}' if self.embed_token else None
         }
@@ -343,10 +348,25 @@ def create_goal():
         return jsonify({'error':'Invalid completion_type. Must be "commit" or "issue"'}),400
     
     try:
+        # Accept either ISO timestamps (with optional Z) or the user-facing 'DD/MM/YYYY HH:MM' format
+        raw_deadline = data.get('deadline')
+        parsed_deadline = None
+        if not raw_deadline:
+            return jsonify({'error': 'Missing deadline'}), 400
+        # Try ISO first
+        try:
+            parsed_deadline = datetime.fromisoformat(raw_deadline.replace('Z', ''))
+        except Exception:
+            try:
+                parsed_deadline = datetime.strptime(raw_deadline, '%d/%m/%Y %H:%M')
+            except Exception:
+                return jsonify({'error': 'Invalid deadline format. Use DD/MM/YYYY HH:MM or ISO.'}), 400
+
         goal = Goal(
             user_github_id=user_id,
             description=data.get('description'),
-            deadline=datetime.fromisoformat(data.get('deadline').replace('Z', '')),
+            deadline=parsed_deadline,
+            deadline_display=data.get('deadline_display') or parsed_deadline.strftime('%d/%m/%Y %H:%M'),
             repo_url=data.get('repo_url'),
             completion_condition=data.get('completion_condition'),
             completion_type=completion_type,
@@ -403,6 +423,72 @@ def delete_goal(goal_id):
     db.session.commit()
 
     return jsonify({'status': 'deleted'}), 200
+
+
+# insert inside application.py, replacing the empty update_goal body
+@application.route('/api/goals/<int:goal_id>', methods=['PUT'])
+def update_goal(goal_id):
+    # Check authentication (consistent with other goal endpoints)
+    if 'user_github_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_github_id']
+
+    goal = Goal.query.get(goal_id)
+    if not goal or goal.user_github_id != user_id:
+        return jsonify({'error': 'Goal not found'}), 404
+
+    data = request.get_json() or {}
+
+    # Allowed fields to update
+    description = data.get('description')
+    deadline_raw = data.get('deadline')
+    completion_condition = data.get('completion_condition')
+    completion_type = data.get('completion_type')
+
+    if description is not None:
+        description = description.strip()
+        if not description:
+            return jsonify({'error': 'Description required'}), 400
+        goal.description = description
+
+    if deadline_raw is not None:
+        # Accept ISO strings (with or without trailing Z) or local datetime formats
+        try:
+            # Normalize Z suffix if present
+            parsed = datetime.fromisoformat(deadline_raw.replace('Z', ''))
+        except Exception:
+            try:
+                parsed = datetime.strptime(deadline_raw, '%Y-%m-%dT%H:%M')
+            except Exception:
+                # Try user-facing format DD/MM/YYYY HH:MM
+                try:
+                    parsed = datetime.strptime(deadline_raw, '%d/%m/%Y %H:%M')
+                except Exception:
+                    return jsonify({'error': 'Invalid deadline format'}), 400
+        goal.deadline = parsed
+        # update the display string if provided in payload, otherwise store a formatted version
+        if 'deadline_display' in data and data.get('deadline_display'):
+            goal.deadline_display = data.get('deadline_display')
+        else:
+            goal.deadline_display = parsed.strftime('%d/%m/%Y %H:%M')
+
+    if completion_condition is not None:
+        goal.completion_condition = completion_condition.strip()
+
+    if completion_type is not None:
+        if completion_type not in ('commit', 'issue'):
+            return jsonify({'error': 'Invalid completion_type'}), 400
+        goal.completion_type = completion_type
+
+    try:
+        db.session.add(goal)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+    return jsonify(goal.to_dict()), 200
 
 @application.route('/embed/<token>')
 def embed_widget(token):
@@ -540,4 +626,14 @@ def download_goal_ics(goal_id):
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()
+        # Ensure 'deadline_display' column exists for older DBs (SQLite)
+        try:
+            res = db.session.execute(text("PRAGMA table_info('goal')")).fetchall()
+            cols = [r[1] for r in res]
+            if 'deadline_display' not in cols:
+                db.session.execute(text("ALTER TABLE goal ADD COLUMN deadline_display VARCHAR(25)"))
+                db.session.commit()
+                print("Added missing column 'deadline_display' to 'goal' table.")
+        except Exception as e:
+            print("Could not ensure deadline_display column:", e)
     application.run(debug=False)
