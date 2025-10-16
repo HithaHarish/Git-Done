@@ -534,4 +534,12 @@ document.addEventListener('DOMContentLoaded', () => {
     new GitDoneApp();
     new ThemeManager();
     new PWAManager();
+
+    flatpickr("#deadline", {
+  enableTime: true,
+  dateFormat: "d/m/Y H:i",
+  time_24hr: true,
+  altInput: true,
+  altFormat: "d/m/Y H:i"
+});
 });
