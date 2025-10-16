@@ -438,7 +438,7 @@ def delete_goal(goal_id):
     return jsonify({'status': 'deleted'}), 200
 
 
-# insert inside application.py, replacing the empty update_goal body
+
 @application.route('/api/goals/<int:goal_id>', methods=['PUT'])
 def update_goal(goal_id):
     # Check authentication (consistent with other goal endpoints)
