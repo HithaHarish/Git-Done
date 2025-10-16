@@ -630,11 +630,4 @@ def download_goal_ics(goal_id):
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()
-        # Ensure 'deadline_display' column exists for older DBs (SQLite)
-        res = db.session.execute(text("PRAGMA table_info('goal')")).fetchall()
-        cols = [r[1] for r in res]
-        if 'deadline_display' not in cols:
-            db.session.execute(text("ALTER TABLE goal ADD COLUMN deadline_display VARCHAR(25)"))
-            db.session.commit()
-            print("Added missing column 'deadline_display' to 'goal' table.")
     application.run(debug=False)
