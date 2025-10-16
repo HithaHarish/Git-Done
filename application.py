@@ -78,6 +78,30 @@ class Goal(db.Model):
             'embed_url': f'{base_url}/embed/{self.embed_token}' if self.embed_token else None
         }
 
+def parse_deadline(raw_deadline):
+    """Parse a deadline string into a datetime.
+    Supports ISO strings (with optional trailing Z), '%Y-%m-%dT%H:%M', and 'DD/MM/YYYY HH:MM'.
+    Raises ValueError on failure.
+    """
+    if not raw_deadline:
+        raise ValueError('Missing deadline')
+    # Normalize Z suffix if present, try ISO first
+    try:
+        return datetime.fromisoformat(str(raw_deadline).replace('Z', ''))
+    except Exception:
+        pass
+    # Try compact local form
+    try:
+        return datetime.strptime(raw_deadline, '%Y-%m-%dT%H:%M')
+    except Exception:
+        pass
+    # Try user-facing display form
+    try:
+        return datetime.strptime(raw_deadline, '%d/%m/%Y %H:%M')
+    except Exception:
+        pass
+    raise ValueError('Invalid deadline format. Use DD/MM/YYYY HH:MM or ISO.')
+
 def create_github_webhook(access_token, owner, repo, webhook_url, secret):
     api_url = f'https://api.github.com/repos/{owner}/{repo}/hooks'
     headers ={
@@ -348,19 +372,8 @@ def create_goal():
         return jsonify({'error':'Invalid completion_type. Must be "commit" or "issue"'}),400
     
     try:
-        # Accept either ISO timestamps (with optional Z) or the user-facing 'DD/MM/YYYY HH:MM' format
         raw_deadline = data.get('deadline')
-        parsed_deadline = None
-        if not raw_deadline:
-            return jsonify({'error': 'Missing deadline'}), 400
-        # Try ISO first
-        try:
-            parsed_deadline = datetime.fromisoformat(raw_deadline.replace('Z', ''))
-        except Exception:
-            try:
-                parsed_deadline = datetime.strptime(raw_deadline, '%d/%m/%Y %H:%M')
-            except Exception:
-                return jsonify({'error': 'Invalid deadline format. Use DD/MM/YYYY HH:MM or ISO.'}), 400
+        parsed_deadline = parse_deadline(raw_deadline)
 
         goal = Goal(
             user_github_id=user_id,
@@ -453,19 +466,10 @@ def update_goal(goal_id):
         goal.description = description
 
     if deadline_raw is not None:
-        # Accept ISO strings (with or without trailing Z) or local datetime formats
         try:
-            # Normalize Z suffix if present
-            parsed = datetime.fromisoformat(deadline_raw.replace('Z', ''))
-        except Exception:
-            try:
-                parsed = datetime.strptime(deadline_raw, '%Y-%m-%dT%H:%M')
-            except Exception:
-                # Try user-facing format DD/MM/YYYY HH:MM
-                try:
-                    parsed = datetime.strptime(deadline_raw, '%d/%m/%Y %H:%M')
-                except Exception:
-                    return jsonify({'error': 'Invalid deadline format'}), 400
+            parsed = parse_deadline(deadline_raw)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
         goal.deadline = parsed
         # update the display string if provided in payload, otherwise store a formatted version
         if 'deadline_display' in data and data.get('deadline_display'):
@@ -627,13 +631,10 @@ if __name__ == '__main__':
     with application.app_context():
         db.create_all()
         # Ensure 'deadline_display' column exists for older DBs (SQLite)
-        try:
-            res = db.session.execute(text("PRAGMA table_info('goal')")).fetchall()
-            cols = [r[1] for r in res]
-            if 'deadline_display' not in cols:
-                db.session.execute(text("ALTER TABLE goal ADD COLUMN deadline_display VARCHAR(25)"))
-                db.session.commit()
-                print("Added missing column 'deadline_display' to 'goal' table.")
-        except Exception as e:
-            print("Could not ensure deadline_display column:", e)
+        res = db.session.execute(text("PRAGMA table_info('goal')")).fetchall()
+        cols = [r[1] for r in res]
+        if 'deadline_display' not in cols:
+            db.session.execute(text("ALTER TABLE goal ADD COLUMN deadline_display VARCHAR(25)"))
+            db.session.commit()
+            print("Added missing column 'deadline_display' to 'goal' table.")
     application.run(debug=False)
