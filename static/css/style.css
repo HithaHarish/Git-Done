@@ -333,6 +333,34 @@ header p {
     width: 100%;
 }
 
+/* Make edit card inputs match the create form styling so inline edit looks identical */
+.edit-card input,
+.edit-card select,
+.edit-card textarea {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius-sm);
+    padding: 1rem 1.25rem;
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.edit-card input::placeholder {
+    color: var(--text-muted);
+}
+
+.edit-card input:focus,
+.edit-card select:focus,
+.edit-card textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-md);
+    background: var(--bg-tertiary);
+    transform: translateY(-1px);
+}
+
 #goal-form select {
     background: var(--bg-secondary);
     border: 1px solid var(--border);

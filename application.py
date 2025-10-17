@@ -45,6 +45,7 @@ class Goal(db.Model):
     user_github_id = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(200), nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
+    deadline_display = db.Column(db.String(25), nullable=True)
     repo_url = db.Column(db.String(500), nullable=False)
     completion_condition = db.Column(db.String(200), nullable=False)
     completion_type = db.Column(db.String(20), default='commit', nullable=False)  # 'commit' or 'issue'
@@ -58,20 +59,48 @@ class Goal(db.Model):
     
     def to_dict(self):
         base_url = os.environ.get('BASE_URL', 'http://localhost:5000')
+        # Serialize datetimes as UTC ISO strings with trailing Z to avoid timezone shifts in the frontend
+        # Prefer the stored user-facing display string (if provided) to avoid timezone conversion issues
+        display_deadline = self.deadline_display if getattr(self, 'deadline_display', None) else (self.deadline.strftime('%d/%m/%Y %H:%M') if self.deadline else None)
         return {
             'id': self.id,
             'user_github_id': self.user_github_id,
             'description': self.description,
-            'deadline': self.deadline.isoformat(),
+            'deadline': self.deadline.isoformat() + 'Z',
+            'deadline_display': display_deadline,
             'repo_url': self.repo_url,
             'completion_condition': self.completion_condition,
             'completion_type': self.completion_type,
             'status': self.status,
-            'created_at': self.created_at.isoformat(),
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'created_at': self.created_at.isoformat() + 'Z',
+            'completed_at': (self.completed_at.isoformat() + 'Z') if self.completed_at else None,
             'embed_token': self.embed_token,
             'embed_url': f'{base_url}/embed/{self.embed_token}' if self.embed_token else None
         }
+
+def parse_deadline(raw_deadline):
+    """Parse a deadline string into a datetime.
+    Supports ISO strings (with optional trailing Z), '%Y-%m-%dT%H:%M', and 'DD/MM/YYYY HH:MM'.
+    Raises ValueError on failure.
+    """
+    if not raw_deadline:
+        raise ValueError('Missing deadline')
+    # Normalize Z suffix if present, try ISO first
+    try:
+        return datetime.fromisoformat(str(raw_deadline).replace('Z', ''))
+    except Exception:
+        pass
+    # Try compact local form
+    try:
+        return datetime.strptime(raw_deadline, '%Y-%m-%dT%H:%M')
+    except Exception:
+        pass
+    # Try user-facing display form
+    try:
+        return datetime.strptime(raw_deadline, '%d/%m/%Y %H:%M')
+    except Exception:
+        pass
+    raise ValueError('Invalid deadline format. Use DD/MM/YYYY HH:MM or ISO.')
 
 def create_github_webhook(access_token, owner, repo, webhook_url, secret):
     api_url = f'https://api.github.com/repos/{owner}/{repo}/hooks'
@@ -351,10 +380,14 @@ def create_goal():
         return jsonify({'error':'Invalid completion_type. Must be "commit" or "issue"'}),400
     
     try:
+        raw_deadline = data.get('deadline')
+        parsed_deadline = parse_deadline(raw_deadline)
+
         goal = Goal(
             user_github_id=user_id,
             description=data.get('description'),
-            deadline=datetime.fromisoformat(data.get('deadline').replace('Z', '')),
+            deadline=parsed_deadline,
+            deadline_display=data.get('deadline_display') or parsed_deadline.strftime('%d/%m/%Y %H:%M'),
             repo_url=data.get('repo_url'),
             completion_condition=data.get('completion_condition'),
             completion_type=completion_type,
@@ -411,6 +444,63 @@ def delete_goal(goal_id):
     db.session.commit()
 
     return jsonify({'status': 'deleted'}), 200
+
+
+
+@application.route('/api/goals/<int:goal_id>', methods=['PUT'])
+def update_goal(goal_id):
+    # Check authentication (consistent with other goal endpoints)
+    if 'user_github_id' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+
+    user_id = session['user_github_id']
+
+    goal = Goal.query.get(goal_id)
+    if not goal or goal.user_github_id != user_id:
+        return jsonify({'error': 'Goal not found'}), 404
+
+    data = request.get_json() or {}
+
+    # Allowed fields to update
+    description = data.get('description')
+    deadline_raw = data.get('deadline')
+    completion_condition = data.get('completion_condition')
+    completion_type = data.get('completion_type')
+
+    if description is not None:
+        description = description.strip()
+        if not description:
+            return jsonify({'error': 'Description required'}), 400
+        goal.description = description
+
+    if deadline_raw is not None:
+        try:
+            parsed = parse_deadline(deadline_raw)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+        goal.deadline = parsed
+        # update the display string if provided in payload, otherwise store a formatted version
+        if 'deadline_display' in data and data.get('deadline_display'):
+            goal.deadline_display = data.get('deadline_display')
+        else:
+            goal.deadline_display = parsed.strftime('%d/%m/%Y %H:%M')
+
+    if completion_condition is not None:
+        goal.completion_condition = completion_condition.strip()
+
+    if completion_type is not None:
+        if completion_type not in ('commit', 'issue'):
+            return jsonify({'error': 'Invalid completion_type'}), 400
+        goal.completion_type = completion_type
+
+    try:
+        db.session.add(goal)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+    return jsonify(goal.to_dict()), 200
 
 @application.route('/embed/<token>')
 def embed_widget(token):

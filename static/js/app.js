@@ -81,6 +81,7 @@ class GitDoneApp {
         const goalData = {
             description: document.getElementById('description').value,
             deadline: deadlineISO,
+            deadline_display: deadlineInput,
             repo_url: document.getElementById('repo-url').value,
             completion_condition: document.getElementById('completion-condition').value,
             completion_type: document.getElementById('completion-type').value
@@ -250,6 +251,7 @@ class GitDoneApp {
             <div class="countdown ${goal.status === 'completed' ? 'completed' : ''}" id="countdown-${goal.id}">--:--:--</div>
             <div class="goal-status ${statusClass}" id="status-${goal.id}">${statusText}</div>
             <div class="goal-actions" style="margin-top: 1rem; display: flex; gap: .5rem;">
+                <button class="btn-secondary" data-action="edit" data-goal-id="${goal.id}" aria-label="Edit goal">✏️ Edit</button>
                 <button class="btn-secondary" data-action="delete" data-goal-id="${goal.id}" aria-label="Delete goal">🗑️ Delete</button>
             </div>
             <div class="embed-info">
@@ -295,6 +297,13 @@ class GitDoneApp {
                 await this.deleteGoal(goal.id);
             });
         }
+        // Edit button
+        const editBtn = widget.querySelector('button[data-action="edit"][data-goal-id="' + goal.id + '"]');
+        if (editBtn) {
+            editBtn.addEventListener('click', (e) => {
+                this.enterEditMode(goal, widget);
+            });
+        }
 
         // Start countdown after the widget is added to DOM
         if (goal.status === 'active') {
@@ -306,6 +315,192 @@ class GitDoneApp {
         return widget;
     }
 
+    enterEditMode(goal, widget) {
+        // Replace description and completion display with editable inputs
+        const titleEl = widget.querySelector('h3');
+        const completionP = widget.querySelector('p[style*="color: var(--text-secondary)"]');
+        const actionsDiv = widget.querySelector('.goal-actions');
+
+        // Create inputs
+    const descInput = document.createElement('input');
+    descInput.type = 'text';
+    descInput.value = goal.description;
+    descInput.className = 'form-control mb-2';
+    descInput.style.width = '100%';
+
+        // Use the same textual input as the create form: DD/MM/YYYY HH:MM to avoid browser timezone quirks
+        const deadlineInput = document.createElement('input');
+        deadlineInput.type = 'text';
+        // Parse incoming ISO (which we now ensure has trailing Z) into DD/MM/YYYY HH:MM local display
+        let displayDeadline = '';
+        try {
+            const dt = new Date(goal.deadline);
+            const pad = (n) => n.toString().padStart(2, '0');
+            const day = pad(dt.getDate());
+            const month = pad(dt.getMonth() + 1);
+            const year = dt.getFullYear();
+            const hours = pad(dt.getHours());
+            const minutes = pad(dt.getMinutes());
+            displayDeadline = `${day}/${month}/${year} ${hours}:${minutes}`;
+        } catch (e) {
+            displayDeadline = '';
+        }
+        deadlineInput.value = displayDeadline;
+        deadlineInput.className = 'form-control mb-2';
+        deadlineInput.placeholder = 'DD/MM/YYYY HH:MM';
+
+        // Completion condition input
+    const completionInput = document.createElement('input');
+    completionInput.type = 'text';
+    completionInput.value = goal.completion_condition;
+    completionInput.className = 'form-control mb-2';
+    completionInput.style.width = '100%';
+
+            // Create a card-styled edit form that mirrors the create form in templates/index.html
+            const editCard = document.createElement('div');
+            editCard.className = 'card edit-card fade-in-up';
+            editCard.style.marginTop = '0.75rem';
+
+            const form = document.createElement('form');
+            form.className = 'edit-form';
+
+            // Description input group
+            const descGroup = document.createElement('div');
+            descGroup.className = 'input-group';
+            const descLabel = document.createElement('label');
+            descLabel.className = 'input-label';
+            descLabel.textContent = 'Description';
+            descGroup.appendChild(descLabel);
+            descGroup.appendChild(descInput);
+            form.appendChild(descGroup);
+
+            // Deadline input group (textual, matches create form)
+            const dlGroup = document.createElement('div');
+            dlGroup.className = 'input-group';
+            const dlLabel = document.createElement('label');
+            dlLabel.className = 'input-label';
+            dlLabel.textContent = 'Deadline (DD/MM/YYYY HH:MM)';
+            dlGroup.appendChild(dlLabel);
+            dlGroup.appendChild(deadlineInput);
+            const dlHelp = document.createElement('small');
+            dlHelp.style.color = 'var(--text-muted)';
+            dlHelp.style.fontSize = '0.85rem';
+            dlHelp.style.display = 'block';
+            dlHelp.style.marginTop = '0.25rem';
+            dlHelp.textContent = 'Format: DD/MM/YYYY HH:MM (e.g., 31/12/2024 23:59)';
+            dlGroup.appendChild(dlHelp);
+            form.appendChild(dlGroup);
+
+            // Completion condition input group
+            const condGroup = document.createElement('div');
+            condGroup.className = 'input-group';
+            const condLabel = document.createElement('label');
+            condLabel.className = 'input-label';
+            condLabel.textContent = 'Completion Condition';
+            condGroup.appendChild(condLabel);
+            condGroup.appendChild(completionInput);
+            form.appendChild(condGroup);
+
+            // Buttons
+            const footer = document.createElement('div');
+            footer.style.display = 'flex';
+            footer.style.gap = '0.5rem';
+            footer.style.marginTop = '0.5rem';
+
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'btn-primary';
+            saveBtn.type = 'submit';
+            saveBtn.textContent = 'Save';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn-secondary';
+            cancelBtn.type = 'button';
+            cancelBtn.textContent = 'Cancel';
+
+            footer.appendChild(saveBtn);
+            footer.appendChild(cancelBtn);
+
+            form.appendChild(footer);
+            editCard.appendChild(form);
+
+            widget.insertBefore(editCard, actionsDiv);
+
+            // Hide the original title and completion paragraph while editing
+            titleEl.style.display = 'none';
+            if (completionP) completionP.style.display = 'none';
+
+            // Cancel handler
+            cancelBtn.addEventListener('click', () => {
+                editCard.remove();
+                titleEl.style.display = '';
+                if (completionP) completionP.style.display = '';
+            });
+
+            // Save handler (form submit)
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newDesc = descInput.value.trim();
+                const newDeadlineText = deadlineInput.value.trim();
+                const newCompletion = completionInput.value.trim();
+
+                if (!newDesc || !newDeadlineText || !newCompletion) {
+                    this.showNotification('❌ All fields are required.', 'error');
+                    return;
+                }
+
+                // Convert DD/MM/YYYY HH:MM to ISO using existing parser
+                const iso = this.parseDeadlineToISO(newDeadlineText);
+                if (!iso) {
+                    this.showNotification('❌ Invalid deadline format. Use DD/MM/YYYY HH:MM', 'error');
+                    return;
+                }
+
+                const payload = {
+                    description: newDesc,
+                    deadline: iso,
+                    completion_condition: newCompletion,
+                    deadline_display: newDeadlineText
+                };
+
+                try {
+                    await this.updateGoal(goal.id, payload);
+                    // updateGoal will refresh the UI; remove edit card just in case
+                    editCard.remove();
+                } catch (err) {
+                    console.error('Failed to update goal', err);
+                }
+            });
+    }
+
+    async updateGoal(goalId, payload) {
+        try {
+            const response = await fetch(`/api/goals/${goalId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload),
+                credentials: 'same-origin'
+            });
+
+            if (response.ok) {
+                const updated = await response.json();
+                // Update local state and re-render
+                this.goals = this.goals.map(g => g.id === updated.id ? updated : g);
+                this.renderGoals();
+                this.showNotification('✏️ Goal updated.', 'success');
+            } else {
+                const err = await response.json().catch(() => ({}));
+                const message = err.error || 'Failed to update goal.';
+                this.showNotification(`❌ ${message}`, 'error');
+            }
+        } catch (err) {
+            console.error('Error updating goal:', err);
+            this.showNotification('❌ Network error. Please try again.', 'error');
+            throw err;
+        }
+    }
+
     startCountdown(goal) {
         const countdownElement = document.getElementById(`countdown-${goal.id}`);
         if (!countdownElement) {
@@ -313,7 +508,21 @@ class GitDoneApp {
             return;
         }
 
-        const deadline = new Date(goal.deadline);
+        // Prefer using the user-facing display if present to avoid timezone shifts
+        let deadline;
+        if (goal.deadline_display) {
+            // parse DD/MM/YYYY HH:MM
+            const match = goal.deadline_display.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+            if (match) {
+                const [, day, month, year, hh, mm] = match;
+                // Construct a Date in local timezone
+                deadline = new Date(parseInt(year), parseInt(month)-1, parseInt(day), parseInt(hh), parseInt(mm));
+            } else {
+                deadline = new Date(goal.deadline);
+            }
+        } else {
+            deadline = new Date(goal.deadline);
+        }
         console.log(`Starting countdown for goal ${goal.id}, deadline: ${deadline}`);
 
         const updateCountdown = () => {
