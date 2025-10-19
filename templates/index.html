@@ -26,6 +26,7 @@
     <meta name="msapplication-TileColor" content="#6366f1">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 </head>
 
 <body>
@@ -90,12 +91,7 @@
                         </div>
                         <div class="input-group">
                             <label for="deadline" class="input-label">Deadline (DD/MM/YYYY HH:MM)</label>
-                            <input type="text" id="deadline" placeholder="31/12/2024 23:59" required
-                                pattern="\d{2}/\d{2}/\d{4} \d{2}:\d{2}">
-                            <small
-                                style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; display: block;">
-                                Format: DD/MM/YYYY HH:MM (e.g., 31/12/2024 23:59)
-                            </small>
+                           <input type="text" id="deadline" placeholder="31/12/2024 23:59" required>
                         </div>
                         <div class="input-group">
                             <input type="url" id="repo-url" placeholder="https://github.com/username/repository"
@@ -144,6 +140,7 @@
 
 
     </div>
+        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <!--Test-Completed-->
