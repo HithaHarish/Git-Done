@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from flask import Response
 
-
 load_dotenv()
 
 application = Flask(__name__)
@@ -136,6 +135,41 @@ def delete_github_webhook(access_token, owner, repo, webhook_id):
         return True
     print("Failed to delete webhook:", response.status_code, response.text)
     return False
+
+# -------------------- MIGRATION ENDPOINT --------------------
+@application.route('/api/migrate', methods=['POST'])
+def migrate_database():
+    """Automatically add missing columns in the 'goal' table if they don't exist"""
+    try:
+        # Fetch current columns in 'goal' table
+        result = db.session.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='goal';"
+        ).fetchall()
+        existing_columns = {c[0] for c in result}
+
+        # Define columns to ensure exist
+        required_columns = {
+            'deadline_display': "VARCHAR(25)",
+            # Add more columns here if needed
+        }
+
+        added_columns = []
+
+        for col_name, col_type in required_columns.items():
+            if col_name not in existing_columns:
+                db.session.execute(text(f"ALTER TABLE goal ADD COLUMN {col_name} {col_type};"))
+                added_columns.append(col_name)
+
+        db.session.commit()
+
+        if added_columns:
+            return jsonify({'status': 'migrated', 'added': added_columns}), 200
+        else:
+            return jsonify({'status': 'no_changes'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
     
 @application.route('/')
 def index():
@@ -154,11 +188,7 @@ def logout():
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
-
-
-
-
-
+    
 @application.route('/service-worker.js')
 def service_worker():
     response = make_response(application.send_static_file('service-worker.js'))
