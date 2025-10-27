@@ -575,6 +575,84 @@ def embed_data_options(token):
     response.headers['Access-Control-Max-Age'] = '3600'
     return response
 
+@application.route('/api/migrate/schema', methods=['POST'])
+def migrate_schema():
+    """Generic schema migration endpoint that syncs database with current model definitions"""
+    try:
+        migrations_applied = []
+        
+        # Check and add missing columns for Goal table
+        goal_columns = {
+            'deadline_display': 'VARCHAR(25)'
+        }
+        
+        for column_name, column_type in goal_columns.items():
+            # Check if column exists
+            result = db.session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'goal' AND column_name = :column_name
+            """), {'column_name': column_name})
+            
+            if not result.fetchone():
+                # Add the column
+                db.session.execute(text(f"""
+                    ALTER TABLE goal 
+                    ADD COLUMN {column_name} {column_type}
+                """))
+                migrations_applied.append(f"Added column 'goal.{column_name}'")
+                
+                # Special handling for deadline_display - populate existing records
+                if column_name == 'deadline_display':
+                    db.session.execute(text("""
+                        UPDATE goal 
+                        SET deadline_display = TO_CHAR(deadline, 'DD/MM/YYYY HH24:MI')
+                        WHERE deadline_display IS NULL
+                    """))
+                    migrations_applied.append("Populated existing deadline_display values")
+        
+        # Check and add missing columns for User table (if needed in future)
+        user_columns = {
+            # Add future user columns here as needed
+            # 'new_column': 'VARCHAR(100)'
+        }
+        
+        for column_name, column_type in user_columns.items():
+            result = db.session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'user' AND column_name = :column_name
+            """), {'column_name': column_name})
+            
+            if not result.fetchone():
+                db.session.execute(text(f"""
+                    ALTER TABLE "user" 
+                    ADD COLUMN {column_name} {column_type}
+                """))
+                migrations_applied.append(f"Added column 'user.{column_name}'")
+        
+        db.session.commit()
+        
+        if migrations_applied:
+            return jsonify({
+                'status': 'success',
+                'message': f'Schema migration completed successfully!',
+                'migrations_applied': migrations_applied
+            }), 200
+        else:
+            return jsonify({
+                'status': 'success',
+                'message': 'Database schema is already up to date.',
+                'migrations_applied': []
+            }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': f'Schema migration failed: {str(e)}'
+        }), 500
+
 @application.route('/api/health')
 def health_check():
     health_status = {
@@ -585,7 +663,7 @@ def health_check():
     }
     # Check database connection
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         health_status['checks']['database'] = 'healthy'
     except Exception as e:
         health_status['checks']['database'] = f'unhealthy: {str(e)}'
