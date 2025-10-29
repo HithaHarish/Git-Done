@@ -84,6 +84,17 @@ class GitDoneApp {
             return;
         }
 
+        // Prevent creating goal with past deadline
+        const deadlineDate = new Date(deadlineISO);
+        const now = new Date();
+        if (deadlineDate < now) {
+            this.showNotification('⚠️ Deadline cannot be in the past.', 'error');
+            submitButton.textContent = originalText;
+            submitButton.disabled = false;
+            submitButton.classList.remove('loading');
+            return;
+        }
+        
         // Validate repo URL format
         const repoURL = document.getElementById('repo-url').value.trim();
         if (!this.validateRepoURL(repoURL)) {

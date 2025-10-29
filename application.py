@@ -413,6 +413,10 @@ def create_goal():
         raw_deadline = data.get('deadline')
         parsed_deadline = parse_deadline(raw_deadline)
 
+        # 🔥 Reject past deadlines
+        if parsed_deadline < datetime.utcnow():
+            return jsonify({'error': 'Deadline cannot be in the past'}), 400
+
         goal = Goal(
             user_github_id=user_id,
             description=data.get('description'),
