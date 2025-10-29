@@ -55,6 +55,13 @@ class GitDoneApp {
         return date.toISOString();
     }
 
+    validateRepoURL(url) {
+    // Regex to match valid GitHub repo URLs
+    const regex = /^(https?:\/\/)?(www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/)?$/;
+    return regex.test(url.trim());
+    }  
+
+
     async createGoal() {
         const form = document.getElementById('goal-form');
         const submitButton = form.querySelector('button[type="submit"]');
@@ -76,6 +83,17 @@ class GitDoneApp {
             submitButton.classList.remove('loading');
             return;
         }
+
+        // Validate repo URL format
+        const repoURL = document.getElementById('repo-url').value.trim();
+        if (!this.validateRepoURL(repoURL)) {
+            this.showNotification('❌ Invalid GitHub repository URL.', 'error');
+            submitButton.textContent = originalText;
+            submitButton.disabled = false;
+            submitButton.classList.remove('loading');
+            return;
+}
+
         
         // The backend knows the user, so we don't need to send user_github_id
         const goalData = {
