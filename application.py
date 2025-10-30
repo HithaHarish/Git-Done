@@ -1,14 +1,15 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, make_response
-import requests
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, Response, make_response
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
+from flask_migrate import Migrate
 from datetime import datetime, timedelta
-import os
+import requests
+import secrets
 import hashlib
 import hmac
-import secrets
+import os
+
 from dotenv import load_dotenv
-from sqlalchemy import text
-from flask import Response
 
 load_dotenv()
 
@@ -16,9 +17,12 @@ application = Flask(__name__)
 
 application.config['GITHUB_CLIENT_ID'] = os.environ.get('GITHUB_CLIENT_ID')
 application.config['GITHUB_CLIENT_SECRET'] = os.environ.get('GITHUB_CLIENT_SECRET')
-application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+application.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///data.db')
 application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
+application.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'devsecret')
+
+db = SQLAlchemy(application)
+migrate = Migrate(application, db)
 
 if not application.config['SECRET_KEY']:
     application.config['SECRET_KEY'] = secrets.token_hex(32)
@@ -28,8 +32,6 @@ application.config['SESSION_COOKIE_HTTPONLY'] = True
 application.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 application.config['SESSION_COOKIE_NAME'] = 'gitdone_session'
 application.config['SESSION_COOKIE_SECURE'] = os.environ.get('BASE_URL', '').startswith('https')
-
-db = SQLAlchemy(application)
 
 class User(db.Model):
     id = db.Column(db.Integer,primary_key = True)
@@ -42,7 +44,8 @@ class User(db.Model):
 class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_github_id = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.String(200), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    details = db.Column(db.Text, nullable=False)
     deadline = db.Column(db.DateTime, nullable=False)
     deadline_display = db.Column(db.String(25), nullable=True)
     repo_url = db.Column(db.String(500), nullable=False)
@@ -64,7 +67,8 @@ class Goal(db.Model):
         return {
             'id': self.id,
             'user_github_id': self.user_github_id,
-            'description': self.description,
+            'title': self.title,
+            'details': self.details,
             'deadline': self.deadline.isoformat() + 'Z',
             'deadline_display': display_deadline,
             'repo_url': self.repo_url,
@@ -139,22 +143,22 @@ def delete_github_webhook(access_token, owner, repo, webhook_id):
 # -------------------- MIGRATION ENDPOINT --------------------
 @application.route('/api/migrate', methods=['POST'])
 def migrate_database():
-    """Automatically add missing columns in the 'goal' table if they don't exist"""
+    """Add missing columns in 'goal' table if they don't exist"""
     try:
-        # Fetch current columns in 'goal' table
-        result = db.session.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name='goal';"
-        ).fetchall()
-        existing_columns = {c[0] for c in result}
+        # Fetch existing column names
+        result = db.session.execute(text("PRAGMA table_info(goal);")).fetchall()
+        existing_columns = {row[1] for row in result}
 
-        # Define columns to ensure exist
+        # Define required columns
         required_columns = {
             'deadline_display': "VARCHAR(25)",
-            # Add more columns here if needed
+            'title': "VARCHAR(255)",
+            'details': "TEXT"
         }
 
         added_columns = []
 
+        # Add missing columns
         for col_name, col_type in required_columns.items():
             if col_name not in existing_columns:
                 db.session.execute(text(f"ALTER TABLE goal ADD COLUMN {col_name} {col_type};"))
@@ -390,8 +394,8 @@ def create_goal():
     
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
-    if not all(k in data for k in ('description','deadline','repo_url','completion_condition')):
+
+    if not all(k in data for k in ('title','details','deadline','repo_url','completion_condition')):
         return jsonify({'error':'Missing required fields'}),400
     user_id = session['user_github_id']
     user = User.query.filter_by(github_id = user_id).first()
@@ -419,7 +423,8 @@ def create_goal():
 
         goal = Goal(
             user_github_id=user_id,
-            description=data.get('description'),
+            title=data.get('title'),
+            details=data.get('details'),
             deadline=parsed_deadline,
             deadline_display=data.get('deadline_display') or parsed_deadline.strftime('%d/%m/%Y %H:%M'),
             repo_url=data.get('repo_url'),
@@ -496,16 +501,23 @@ def update_goal(goal_id):
     data = request.get_json() or {}
 
     # Allowed fields to update
-    description = data.get('description')
+    title = data.get('title')
+    details = data.get('details')
     deadline_raw = data.get('deadline')
     completion_condition = data.get('completion_condition')
     completion_type = data.get('completion_type')
 
-    if description is not None:
-        description = description.strip()
-        if not description:
-            return jsonify({'error': 'Description required'}), 400
-        goal.description = description
+    if title is not None:
+        title = title.strip()
+        if not title:
+            return jsonify({'error': 'Title required'}), 400
+        goal.title = title
+
+    if details is not None:
+        details = details.strip()
+        if not details:
+            return jsonify({'error': 'Details required'}), 400
+        goal.details = details
 
     if deadline_raw is not None:
         try:
@@ -568,7 +580,8 @@ def embed_data(token):
         is_overdue = time_left.total_seconds() <= 0
     
     response_data = {
-        'description': goal.description,
+        'title': goal.title,
+        'details': goal.details,
         'deadline': goal.deadline.isoformat() + 'Z',  # UTC with Z suffix
         'status': goal.status,
         'time_remaining': time_remaining,
@@ -736,7 +749,7 @@ def download_goal_ics(goal_id):
                       UID:{goal.id}@git-done.app
                       DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}
                       DTSTART:{goal.deadline.strftime('%Y%m%dT%H%M%SZ')}
-                      SUMMARY:{goal.description}
+                      SUMMARY:{goal.title}
                       DESCRIPTION:GitHub Repo: {goal.repo_url} | Completion Tag: {goal.completion_condition}
                       END:VEVENT
                       END:VCALENDAR
