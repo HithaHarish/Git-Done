@@ -3,6 +3,7 @@ class GitDoneApp {
     constructor() {
         this.goals = [];
         this.countdownIntervals = new Map();
+        this.searchQuery = '';
 
         // Check if the dashboard exists on the page (i.e., user is logged in)
         if (document.getElementById('dashboard')) {
@@ -30,6 +31,15 @@ class GitDoneApp {
                 }
             });
         }
+
+        const searchInput = document.getElementById('searchGoals');
+        if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            this.searchQuery = e.target.value.toLowerCase();
+            this.renderGoals(); // re-render with filtered list
+        });
+        }
+
     }
 
     parseDeadlineToISO(deadlineStr) {
@@ -214,25 +224,30 @@ class GitDoneApp {
 
     renderGoals() {
         const container = document.getElementById('goals-container');
-        container.innerHTML = ''; // Clear existing goals
-        
-        if (this.goals.length === 0) {
+        container.innerHTML = '';
+
+        // Filter based on search
+        const filteredGoals = this.goals.filter(g =>
+            g.description.toLowerCase().includes(this.searchQuery)
+        );
+
+        if (filteredGoals.length === 0) {
             container.innerHTML = `
-                <div class="card fade-in-up" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                    <h3 style="margin-bottom: 1rem; color: var(--text-primary);">🎯 No goals yet</h3>
-                    <p>Create your first goal above to start tracking your progress!</p>
-                </div>
+            <div class="card fade-in-up" style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                <h3 style="margin-bottom: 1rem; color: var(--text-primary);">🎯 No matching goals</h3>
+                <p>${this.searchQuery ? 'Try another keyword.' : 'Create your first goal!'}</p>
+            </div>
             `;
             return;
         }
-    
-        this.goals.forEach((goal, index) => {
+
+        filteredGoals.forEach((goal, index) => {
             const goalElement = this.createGoalWidget(goal);
-            // Stagger animations
             goalElement.style.animationDelay = `${index * 0.1}s`;
             container.appendChild(goalElement);
         });
     }
+
 
     createGoalWidget(goal) {
         const widget = document.createElement('div');
