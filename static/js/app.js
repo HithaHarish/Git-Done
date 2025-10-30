@@ -97,7 +97,8 @@ class GitDoneApp {
         
         // The backend knows the user, so we don't need to send user_github_id
         const goalData = {
-            description: document.getElementById('description').value,
+            title: document.getElementById('title').value,
+            details: document.getElementById('details').value,
             deadline: deadlineISO,
             deadline_display: deadlineInput,
             repo_url: document.getElementById('repo-url').value,
@@ -258,7 +259,8 @@ class GitDoneApp {
             : `💬 Complete with commit message: ${goal.completion_condition}`;
 
         widget.innerHTML = `
-            <h3>${goal.description}</h3>
+            <h3>${goal.title}</h3>
+            <p style="margin-bottom: 1rem; color: var(--text-primary);">${goal.details}</p>
             <p style="margin-bottom: 1.5rem;">
                 <strong>📁 Repository:</strong> 
                 <a href="${goal.repo_url}" target="_blank" rel="noopener noreferrer">${repoName}</a>
@@ -334,17 +336,17 @@ class GitDoneApp {
     }
 
     enterEditMode(goal, widget) {
-        // Replace description and completion display with editable inputs
+        // Replace title and completion display with editable inputs
         const titleEl = widget.querySelector('h3');
         const completionP = widget.querySelector('p[style*="color: var(--text-secondary)"]');
         const actionsDiv = widget.querySelector('.goal-actions');
 
         // Create inputs
-    const descInput = document.createElement('input');
-    descInput.type = 'text';
-    descInput.value = goal.description;
-    descInput.className = 'form-control mb-2';
-    descInput.style.width = '100%';
+        const titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.value = goal.title;
+        titleInput.className = 'form-control mb-2';
+        titleInput.style.width = '100%';
 
         // Use the same textual input as the create form: DD/MM/YYYY HH:MM to avoid browser timezone quirks
         const deadlineInput = document.createElement('input');
@@ -382,15 +384,15 @@ class GitDoneApp {
             const form = document.createElement('form');
             form.className = 'edit-form';
 
-            // Description input group
-            const descGroup = document.createElement('div');
-            descGroup.className = 'input-group';
-            const descLabel = document.createElement('label');
-            descLabel.className = 'input-label';
-            descLabel.textContent = 'Description';
-            descGroup.appendChild(descLabel);
-            descGroup.appendChild(descInput);
-            form.appendChild(descGroup);
+            // Details input group
+            const detailsGroup = document.createElement('div');
+            detailsGroup.className = 'input-group';
+            const detailsLabel = document.createElement('label');
+            detailsLabel.className = 'input-label';
+            detailsLabel.textContent = 'Details';
+            detailsGroup.appendChild(detailsLabel);
+            detailsGroup.appendChild(detailsInput);
+            form.appendChild(detailsGroup);
 
             // Deadline input group (textual, matches create form)
             const dlGroup = document.createElement('div');
@@ -457,11 +459,11 @@ class GitDoneApp {
             // Save handler (form submit)
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const newDesc = descInput.value.trim();
+                const newDetails = detailsInput.value.trim();
                 const newDeadlineText = deadlineInput.value.trim();
                 const newCompletion = completionInput.value.trim();
 
-                if (!newDesc || !newDeadlineText || !newCompletion) {
+                if (!newDetails || !newDeadlineText || !newCompletion) {
                     this.showNotification('❌ All fields are required.', 'error');
                     return;
                 }
@@ -474,7 +476,8 @@ class GitDoneApp {
                 }
 
                 const payload = {
-                    description: newDesc,
+                    title: titleInput.value.trim(),
+                    details: detailsInput.value.trim(),
                     deadline: iso,
                     completion_condition: newCompletion,
                     deadline_display: newDeadlineText
