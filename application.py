@@ -139,41 +139,6 @@ def delete_github_webhook(access_token, owner, repo, webhook_id):
         return True
     print("Failed to delete webhook:", response.status_code, response.text)
     return False
-
-# -------------------- MIGRATION ENDPOINT --------------------
-@application.route('/api/migrate', methods=['POST'])
-def migrate_database():
-    """Add missing columns in 'goal' table if they don't exist"""
-    try:
-        # Fetch existing column names
-        result = db.session.execute(text("PRAGMA table_info(goal);")).fetchall()
-        existing_columns = {row[1] for row in result}
-
-        # Define required columns
-        required_columns = {
-            'deadline_display': "VARCHAR(25)",
-            'title': "VARCHAR(255)",
-            'details': "TEXT"
-        }
-
-        added_columns = []
-
-        # Add missing columns
-        for col_name, col_type in required_columns.items():
-            if col_name not in existing_columns:
-                db.session.execute(text(f"ALTER TABLE goal ADD COLUMN {col_name} {col_type};"))
-                added_columns.append(col_name)
-
-        db.session.commit()
-
-        if added_columns:
-            return jsonify({'status': 'migrated', 'added': added_columns}), 200
-        else:
-            return jsonify({'status': 'no_changes'}), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
     
 @application.route('/')
 def index():
@@ -627,9 +592,9 @@ def migrate_schema():
     """Generic schema migration endpoint that syncs database with current model definitions"""
     try:
         migrations_applied = []
-        
-        # Check and add missing columns for Goal table
         goal_columns = {
+            'title': 'VARCHAR(255)',
+            'details': 'TEXT',
             'deadline_display': 'VARCHAR(25)'
         }
         
@@ -658,9 +623,8 @@ def migrate_schema():
                     """))
                     migrations_applied.append("Populated existing deadline_display values")
         
-        # Check and add missing columns for User table (if needed in future)
+        # Check and add missing columns for User table
         user_columns = {
-            # Add future user columns here as needed
             # 'new_column': 'VARCHAR(100)'
         }
         
