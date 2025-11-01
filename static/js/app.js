@@ -240,7 +240,7 @@ class GitDoneApp {
 
         // Filter based on search
         const filteredGoals = this.goals.filter(g =>
-            g.description.toLowerCase().includes(this.searchQuery)
+            g.title.toLowerCase().includes(this.searchQuery)
         );
 
         if (filteredGoals.length === 0) {
@@ -896,4 +896,5 @@ document.addEventListener('DOMContentLoaded', () => {
   altInput: true,
   altFormat: "d/m/Y H:i"
 });
+
 });
