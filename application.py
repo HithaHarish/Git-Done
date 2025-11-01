@@ -590,6 +590,7 @@ def embed_data_options(token):
 @application.route('/api/migrate/schema', methods=['POST'])
 def migrate_schema():
     """Generic schema migration endpoint that syncs database with current model definitions"""
+    migrations_applied = []
     try:
         try:
         # Check if the old 'description' column exists
@@ -611,7 +612,7 @@ def migrate_schema():
                 'status': 'error',
                 'message': f'Failed to drop legacy description column: {str(e)}'
             }), 500
-        migrations_applied = []
+        
         goal_columns = {
             'title': 'VARCHAR(255)',
             'details': 'TEXT',
