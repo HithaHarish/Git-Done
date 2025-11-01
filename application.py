@@ -663,6 +663,28 @@ def migrate_schema():
             'status': 'error',
             'message': f'Schema migration failed: {str(e)}'
         }), 500
+    try:
+        # Check if the old 'description' column exists
+        result = db.session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'goal' AND column_name = 'description'
+        """))
+    
+        if result.fetchone():
+            # If it exists, drop it
+            db.session.execute(text("""
+                ALTER TABLE goal 
+                DROP COLUMN description
+            """))
+            migrations_applied.append("Dropped legacy column 'goal.description'")
+    except Exception as e:
+        # Handle cases where dropping might fail (e.g., dependencies)
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to drop legacy description column: {str(e)}'
+        }), 500
 
 @application.route('/api/health')
 def health_check():
