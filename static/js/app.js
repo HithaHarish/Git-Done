@@ -270,22 +270,22 @@ class GitDoneApp {
         let completionTypeDisplay = '';
         switch (goal.completion_type) {
             case 'commit':
-                completionTypeDisplay = `💬 Complete with commit message: ${goal.completion_condition}`;
+                completionTypeDisplay = `Complete with commit message: ${goal.completion_condition}`;
                 break;
             case 'issue':
-                completionTypeDisplay = `🎫 Complete when issue ${goal.completion_condition} is closed`;
+                completionTypeDisplay = `Complete when issue ${goal.completion_condition} is closed`;
                 break;
             case 'pr':
-                completionTypeDisplay = `🔀 Complete when pull request ${goal.completion_condition} is merged`;
+                completionTypeDisplay = `Complete when pull request ${goal.completion_condition} is merged`;
                 break;
             case 'tag':
-                completionTypeDisplay = `🏷️ Complete when tag ${goal.completion_condition} is created`;
+                completionTypeDisplay = `Complete when tag ${goal.completion_condition} is created`;
                 break;
             case 'manual':
-                completionTypeDisplay = `🖐️ Manually mark as completed`;
+                completionTypeDisplay = `Manually mark as completed`;
                 break;
             default:
-                completionTypeDisplay = `⚙️ Completion condition: ${goal.completion_condition}`;
+                completionTypeDisplay = `Completion condition: ${goal.completion_condition}`;
         }
 
 
@@ -899,4 +899,5 @@ document.addEventListener('DOMContentLoaded', () => {
   altInput: true,
   altFormat: "d/m/Y H:i"
 });
+
 });
